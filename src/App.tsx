@@ -289,7 +289,7 @@ export function App(): JSX.Element {
         {tweaks.canvas && <CanvasPane onClose={() => setTweak({ canvas: false })} />}
       </main>
 
-      <Inspector />
+      <Inspector conversationId={activeConv} agentName={headerAgent} />
 
       {showTree && activeConv && (
         <TreeView tree={thread.state.tree} onClose={() => setShowTree(false)} />

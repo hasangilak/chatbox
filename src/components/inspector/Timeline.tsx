@@ -1,28 +1,12 @@
-type TimelineKind = "user" | "reason" | "tool" | "clar" | "perm" | "stream";
-type TimelineStatus = "ok" | "pending" | "err";
+import { getTimeline } from "../../api/conversations";
+import type { TimelineEvent } from "../../api/wire";
+import { useAsync } from "../../state/useAsync";
 
-interface TimelineRow {
-  t: string;
-  kind: TimelineKind;
-  label: string;
-  sub: string;
-  status?: TimelineStatus;
+export interface TimelineProps {
+  conversationId: string | null;
 }
 
-const ROWS: TimelineRow[] = [
-  { t: "11:28:02", kind: "user", label: "You · sent", sub: "Walk me through refactoring the retry policy…" },
-  { t: "11:28:03", kind: "reason", label: "Reasoning · 4 steps", sub: "Diagnose → read code → draft policy" },
-  { t: "11:28:05", kind: "tool", label: "read_file", sub: "services/orders/src/retry.ts · 0.4s · 18 lines", status: "ok" },
-  { t: "11:28:06", kind: "clar", label: "Clarifying question", sub: "Idempotency, jitter, budget, OTel?" },
-  { t: "11:30:11", kind: "user", label: "You · sent", sub: "Payments API uses Idempotency-Key…" },
-  { t: "11:31:02", kind: "reason", label: "Reasoning · 4 steps", sub: "Full-jitter + retry budget + deadline" },
-  { t: "11:31:10", kind: "perm", label: "Permission · write_file", sub: "Allowed once by you" },
-  { t: "11:33:22", kind: "user", label: "You · sent", sub: "Approved. Also add OTel spans." },
-  { t: "11:34:01", kind: "tool", label: "write_file", sub: "3 files · 1.1s · +222 −9", status: "ok" },
-  { t: "11:34:08", kind: "stream", label: "Streaming summary", sub: "128 tokens · in progress", status: "pending" },
-];
-
-function dotClass(row: TimelineRow): string {
+function dotClass(row: TimelineEvent): string {
   if (row.status === "ok") return "ok";
   if (row.status === "pending") return "pending";
   if (row.status === "err") return "err";
@@ -30,12 +14,64 @@ function dotClass(row: TimelineRow): string {
   return "";
 }
 
-export function Timeline(): JSX.Element {
+function formatTime(at: number): string {
+  const d = new Date(at);
+  return d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+export function Timeline({ conversationId }: TimelineProps): JSX.Element {
+  const { status, data, error } = useAsync(
+    () => (conversationId ? getTimeline(conversationId) : Promise.resolve([])),
+    [conversationId],
+  );
+
+  if (!conversationId) {
+    return (
+      <div className="timeline">
+        <div style={{ padding: 16, color: "var(--ink-3)", fontSize: 12 }}>
+          Open a conversation to see its timeline.
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "loading" && !data) {
+    return (
+      <div className="timeline">
+        <div style={{ padding: 16, color: "var(--ink-3)", fontSize: 12 }}>Loading…</div>
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <div className="timeline">
+        <div style={{ padding: 16, color: "var(--crimson)", fontSize: 12 }}>{error}</div>
+      </div>
+    );
+  }
+
+  const rows = data ?? [];
+  if (!rows.length) {
+    return (
+      <div className="timeline">
+        <div style={{ padding: 16, color: "var(--ink-3)", fontSize: 12 }}>
+          No events yet — send a message to populate the timeline.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="timeline">
-      {ROWS.map((r, i) => (
-        <div className="timeline-row" key={i}>
-          <div className="t">{r.t}</div>
+      {rows.map((r) => (
+        <div className="timeline-row" key={r.id}>
+          <div className="t">{formatTime(r.at)}</div>
           <div className="rail">
             <span className={`node ${dotClass(r)}`} />
           </div>

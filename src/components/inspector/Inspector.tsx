@@ -8,7 +8,12 @@ type InspectorTab = "timeline" | "agent" | "notes";
 
 const TABS: InspectorTab[] = ["timeline", "agent", "notes"];
 
-export function Inspector(): JSX.Element {
+export interface InspectorProps {
+  conversationId: string | null;
+  agentName: string | null;
+}
+
+export function Inspector({ conversationId, agentName }: InspectorProps): JSX.Element {
   const [tab, setTab] = useState<InspectorTab>("timeline");
   return (
     <aside className="inspector">
@@ -32,9 +37,9 @@ export function Inspector(): JSX.Element {
         </button>
       </div>
       <div className="insp-body">
-        {tab === "timeline" && <Timeline />}
-        {tab === "agent" && <AgentPanel />}
-        {tab === "notes" && <NotesPanel />}
+        {tab === "timeline" && <Timeline conversationId={conversationId} />}
+        {tab === "agent" && <AgentPanel agentName={agentName} />}
+        {tab === "notes" && <NotesPanel conversationId={conversationId} />}
       </div>
     </aside>
   );
