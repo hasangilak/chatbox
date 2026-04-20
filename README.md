@@ -2,6 +2,8 @@
 
 A warm, editorial-feeling chat application for working with LLMs. Built as a production-ready React + TypeScript app with Vite.
 
+![Workbench preview](docs/preview.png)
+
 ## Features
 
 - **Three layouts** — Atelier (editorial paper), Ledger (dense journal with margin notes), Workshop (wider canvas)
