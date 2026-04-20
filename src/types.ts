@@ -44,12 +44,14 @@ export interface ClarifyChip {
 }
 
 export interface ClarifyData {
+  id?: string;
   question: string;
   chips: ClarifyChip[];
   input: string;
 }
 
 export interface ApprovalData {
+  id?: string;
   tool: string;
   title: string;
   body: string;

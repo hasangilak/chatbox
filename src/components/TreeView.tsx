@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { Icon } from "./Icon";
 import { syntaxHighlight } from "../utils/syntaxHighlight";
-import { SAMPLE_TREE } from "../data/sample";
-import type { MessageNode } from "../types";
+import { branchNode, pruneNode, regenerateNode } from "../api/nodes";
+import type { MessageNode, MessageTree } from "../types";
 
 export interface TreeViewProps {
+  tree: MessageTree;
   onClose: () => void;
 }
 
@@ -56,16 +57,58 @@ function buildLayout(nodes: Record<string, MessageNode>): {
   return { pos, branchRows, width, height, depthCount: depths.size };
 }
 
-export function TreeView({ onClose }: TreeViewProps): JSX.Element {
-  const tree = SAMPLE_TREE;
-  const [activeId, setActiveId] = useState<string>("n-04");
+function firstNodeId(tree: MessageTree): string {
+  return tree.activeLeaf || tree.rootId || Object.keys(tree.nodes)[0] || "";
+}
+
+export function TreeView({ tree, onClose }: TreeViewProps): JSX.Element {
+  const [activeId, setActiveId] = useState<string>(() => firstNodeId(tree));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [ripple, setRipple] = useState<boolean>(true);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const nodes = tree.nodes;
-  const active = nodes[activeId];
+  const active = nodes[activeId] ?? nodes[firstNodeId(tree)];
   const nodeList = useMemo(() => Object.values(nodes), [nodes]);
   const layout = useMemo(() => buildLayout(nodes), [nodes]);
+
+  const runAction = async (kind: "branch" | "regenerate" | "prune", nodeId: string) => {
+    if (busy) return;
+    setBusy(kind);
+    try {
+      if (kind === "branch") await branchNode(nodeId);
+      if (kind === "regenerate") await regenerateNode(nodeId);
+      if (kind === "prune")
+        await pruneNode(nodeId, { fallbackLeaf: tree.activeLeaf || undefined });
+    } catch (err) {
+      console.error(`${kind} failed`, err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!active) {
+    return (
+      <div className="overlay" onClick={onClose}>
+        <div
+          className="modal"
+          style={{ maxWidth: 600, width: "90vw" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal-head">
+            <Icon name="tree" size={18} />
+            <div className="title">Message tree</div>
+            <button className="icon-btn" onClick={onClose}>
+              <Icon name="x" size={14} />
+            </button>
+          </div>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)" }}>
+            No messages yet.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -467,8 +510,11 @@ export function TreeView({ onClose }: TreeViewProps): JSX.Element {
                     gap: 8,
                     alignItems: "center",
                   }}
+                  onClick={() => void runAction("branch", active.id)}
+                  disabled={busy !== null}
                 >
-                  <Icon name="branch" size={12} /> Branch from this node
+                  <Icon name="branch" size={12} />{" "}
+                  {busy === "branch" ? "Branching…" : "Branch from this node"}
                 </button>
                 <button
                   className="btn"
@@ -478,8 +524,12 @@ export function TreeView({ onClose }: TreeViewProps): JSX.Element {
                     gap: 8,
                     alignItems: "center",
                   }}
+                  onClick={() => void runAction("regenerate", active.id)}
+                  disabled={busy !== null || active.role !== "asst"}
+                  title={active.role === "asst" ? undefined : "Regenerate works on assistant nodes"}
                 >
-                  <Icon name="play" size={11} /> Regenerate from here
+                  <Icon name="play" size={11} />{" "}
+                  {busy === "regenerate" ? "Regenerating…" : "Regenerate from here"}
                 </button>
                 <button
                   className="btn"
@@ -489,6 +539,7 @@ export function TreeView({ onClose }: TreeViewProps): JSX.Element {
                     gap: 8,
                     alignItems: "center",
                   }}
+                  onClick={() => setActiveId(active.id)}
                 >
                   <Icon name="canvasArrow" size={12} /> Jump to message
                 </button>
@@ -500,8 +551,10 @@ export function TreeView({ onClose }: TreeViewProps): JSX.Element {
                     gap: 8,
                     alignItems: "center",
                   }}
+                  onClick={() => void runAction("prune", active.id)}
+                  disabled={busy !== null}
                 >
-                  <Icon name="x" size={12} /> Prune subtree
+                  <Icon name="x" size={12} /> {busy === "prune" ? "Pruning…" : "Prune subtree"}
                 </button>
               </div>
             </div>

@@ -1,44 +1,38 @@
 import { Icon } from "../Icon";
-import { SAMPLE_AGENTS } from "../../data/sample";
+import { useAgentTemplates } from "../../state/useWorkspace";
+import { instantiateTemplate } from "../../api/agents";
 import type { Agent } from "../../types";
+import type { AgentFull } from "../../api/wire";
 
 export interface AgentGalleryProps {
+  agents: Agent[];
   onClose: () => void;
-  onOpenBuilder: (agent: Agent | null) => void;
+  onOpenBuilder: (agent: Agent | AgentFull | null) => void;
 }
 
-interface StarterTemplate {
-  name: string;
-  desc: string;
-  mark: string;
-}
+export function AgentGallery({
+  agents,
+  onClose,
+  onOpenBuilder,
+}: AgentGalleryProps): JSX.Element {
+  const templates = useAgentTemplates();
 
-const STARTER_TEMPLATES: StarterTemplate[] = [
-  { name: "Socratic Tutor", desc: "Leads with questions. Never gives the answer immediately.", mark: "S" },
-  { name: "Data Analyst", desc: "SQL + charts. Caveats correlation vs causation.", mark: "D" },
-  { name: "Interview Coach", desc: "Mock interviews with structured feedback.", mark: "I" },
-];
-
-function templateToAgent(t: StarterTemplate): Agent {
-  return {
-    id: `tpl-${t.mark.toLowerCase()}`,
-    name: t.name,
-    initial: t.mark,
-    desc: t.desc,
-    model: "claude-sonnet-4.5",
-    tools: 2,
-    temp: 0.5,
+  const instantiate = async (templateId: string) => {
+    try {
+      const full = await instantiateTemplate(templateId);
+      onOpenBuilder(full);
+    } catch (err) {
+      console.error("instantiate template failed", err);
+    }
   };
-}
 
-export function AgentGallery({ onClose, onOpenBuilder }: AgentGalleryProps): JSX.Element {
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <Icon name="users" size={18} />
           <div className="title">Agents</div>
-          <div className="smallcaps">your library · 6</div>
+          <div className="smallcaps">your library · {agents.length}</div>
           <button className="icon-btn" onClick={onClose}>
             <Icon name="x" size={14} />
           </button>
@@ -66,7 +60,7 @@ export function AgentGallery({ onClose, onOpenBuilder }: AgentGalleryProps): JSX
                 Start from a blank slate or a template.
               </div>
             </div>
-            {SAMPLE_AGENTS.map((a) => (
+            {agents.map((a) => (
               <div key={a.id} className="agent-card" onClick={() => onOpenBuilder(a)}>
                 <div className="mark">{a.initial}</div>
                 <div className="an">{a.name}</div>
@@ -83,13 +77,19 @@ export function AgentGallery({ onClose, onOpenBuilder }: AgentGalleryProps): JSX
           <div style={{ marginTop: 22 }}>
             <div className="smallcaps" style={{ marginBottom: 10 }}>
               Starter templates
+              {templates.status === "loading" && "…"}
+              {templates.status === "error" && (
+                <span style={{ color: "var(--crimson)", marginLeft: 8 }}>
+                  {templates.error}
+                </span>
+              )}
             </div>
             <div className="agent-grid">
-              {STARTER_TEMPLATES.map((t) => (
+              {(templates.data ?? []).map((t) => (
                 <div
-                  key={t.name}
+                  key={t.id}
                   className="agent-card"
-                  onClick={() => onOpenBuilder(templateToAgent(t))}
+                  onClick={() => void instantiate(t.id)}
                 >
                   <div
                     className="mark"
@@ -99,7 +99,7 @@ export function AgentGallery({ onClose, onOpenBuilder }: AgentGalleryProps): JSX
                       borderColor: "var(--lapis)",
                     }}
                   >
-                    {t.mark}
+                    {t.initial}
                   </div>
                   <div className="an">{t.name}</div>
                   <div className="ad">{t.desc}</div>

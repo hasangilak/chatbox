@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Icon } from "../Icon";
+import { decideApproval } from "../../api/approvals";
 import type { ApprovalData } from "../../types";
 
 type Decision = "allow" | "always" | "deny";
@@ -11,10 +12,24 @@ export interface ApprovalCardProps {
 
 export function ApprovalCard({ approval, onDecision }: ApprovalCardProps): JSX.Element {
   const [decision, setDecision] = useState<Decision | null>(null);
+  const [submitting, setSubmitting] = useState<Decision | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const decide = (d: Decision) => {
-    setDecision(d);
-    onDecision?.(d);
+  const decide = async (d: Decision) => {
+    if (submitting || decision) return;
+    setSubmitting(d);
+    setError(null);
+    try {
+      if (approval.id) {
+        await decideApproval(approval.id, d);
+      }
+      setDecision(d);
+      onDecision?.(d);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(null);
+    }
   };
 
   if (decision) {
@@ -55,19 +70,34 @@ export function ApprovalCard({ approval, onDecision }: ApprovalCardProps): JSX.E
       </div>
       {approval.preview && <div className="approval-args">{approval.preview}</div>}
       <div className="approval-actions">
-        <button className="btn btn-primary" onClick={() => decide("allow")}>
+        <button
+          className="btn btn-primary"
+          onClick={() => void decide("allow")}
+          disabled={submitting !== null}
+        >
           <Icon name="check" size={12} />
-          &nbsp;Allow once
+          &nbsp;{submitting === "allow" ? "Allowing…" : "Allow once"}
         </button>
-        <button className="btn" onClick={() => decide("always")}>
-          Allow always for{" "}
+        <button
+          className="btn"
+          onClick={() => void decide("always")}
+          disabled={submitting !== null}
+        >
+          {submitting === "always" ? "Allowing…" : "Allow always for "}
           <code style={{ fontFamily: "JetBrains Mono", fontSize: 11 }}>{approval.tool}</code>
         </button>
-        <button className="btn btn-danger" onClick={() => decide("deny")}>
+        <button
+          className="btn btn-danger"
+          onClick={() => void decide("deny")}
+          disabled={submitting !== null}
+        >
           <Icon name="x" size={12} />
-          &nbsp;Deny
+          &nbsp;{submitting === "deny" ? "Denying…" : "Deny"}
         </button>
       </div>
+      {error && (
+        <div style={{ marginTop: 8, color: "var(--crimson)", fontSize: 11.5 }}>{error}</div>
+      )}
     </div>
   );
 }

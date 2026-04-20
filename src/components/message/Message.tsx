@@ -10,7 +10,7 @@ import type { MessageNode } from "../../types";
 export interface MessageProps {
   node: MessageNode;
   index: number;
-  onEdit?: (draft: string) => void;
+  onEdit?: (draft: string, opts: { ripple: boolean }) => Promise<void> | void;
   onBranch?: () => void;
 }
 
@@ -29,8 +29,24 @@ const MARGIN_NOTES: Record<number, string> = {
 export function Message({ node, index, onEdit, onBranch }: MessageProps): JSX.Element {
   const [editing, setEditing] = useState<boolean>(false);
   const [draft, setDraft] = useState<string>(node.content);
+  const [ripple, setRipple] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
   const isUser = node.role === "user";
   const numLabel = String(index).padStart(2, "0");
+
+  const save = async () => {
+    if (!onEdit) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onEdit(draft, { ripple });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (editing) {
     return (
@@ -52,22 +68,35 @@ export function Message({ node, index, onEdit, onBranch }: MessageProps): JSX.El
             autoFocus
           />
           <div className="inline-edit-foot">
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                onEdit?.(draft);
-                setEditing(false);
-              }}
-            >
+            <button className="btn btn-primary" onClick={() => void save()} disabled={saving}>
               <Icon name="branch" size={11} />
-              &nbsp;Save & branch
+              &nbsp;{saving ? "Saving…" : "Save & branch"}
             </button>
-            <button className="btn btn-ghost" onClick={() => setEditing(false)}>
+            <button
+              className="btn btn-ghost"
+              onClick={() => setEditing(false)}
+              disabled={saving}
+            >
               Cancel
             </button>
-            <span className="smallcaps" style={{ marginLeft: "auto" }}>
-              changes will ripple to children
-            </span>
+            <label
+              style={{
+                marginLeft: "auto",
+                display: "inline-flex",
+                gap: 6,
+                alignItems: "center",
+                fontSize: 11,
+                color: "var(--ink-3)",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={ripple}
+                onChange={(e) => setRipple(e.target.checked)}
+                disabled={saving}
+              />
+              ripple to children
+            </label>
           </div>
         </div>
         <div className="msg-gutter" />

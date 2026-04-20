@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
+import { Composer } from "./components/Composer";
 import { Message, StatusLine } from "./components/message";
 import { Inspector } from "./components/inspector";
 import { TreeView } from "./components/TreeView";
 import { AgentGallery, AgentBuilder } from "./components/agents";
 import { CanvasPane } from "./components/CanvasPane";
 import { TweaksPanel } from "./components/TweaksPanel";
-import { SAMPLE_TREE } from "./data/sample";
+import { useThread } from "./state/useThread";
+import { useAgents, useConversations, useTags } from "./state/useWorkspace";
+import { createConversation } from "./api/conversations";
+import { editNode, regenerateNode } from "./api/nodes";
 import type { Agent, MessageNode, TweakState } from "./types";
+import type { AgentFull } from "./api/wire";
 
 const DEFAULT_TWEAKS: TweakState = {
   theme: "light",
@@ -20,7 +25,10 @@ const DEFAULT_TWEAKS: TweakState = {
   margins: true,
 };
 
-function computeLinearThread(activeLeaf: string, nodes: Record<string, MessageNode>): MessageNode[] {
+function computeLinearThread(
+  activeLeaf: string,
+  nodes: Record<string, MessageNode>,
+): MessageNode[] {
   const chain: MessageNode[] = [];
   let cur: MessageNode | undefined = nodes[activeLeaf];
   while (cur) {
@@ -30,14 +38,20 @@ function computeLinearThread(activeLeaf: string, nodes: Record<string, MessageNo
   return chain;
 }
 
+type BuilderTarget = Agent | AgentFull | null;
+
 export function App(): JSX.Element {
   const [tweaks, setTweaks] = useState<TweakState>(DEFAULT_TWEAKS);
   const [showTweaks, setShowTweaks] = useState<boolean>(false);
-  const [activeConv, setActiveConv] = useState<string>("c-01");
+  const [activeConv, setActiveConv] = useState<string | null>(null);
   const [activeTag, setActiveTag] = useState<string>("all");
   const [showTree, setShowTree] = useState<boolean>(false);
   const [showAgents, setShowAgents] = useState<boolean>(false);
-  const [builderAgent, setBuilderAgent] = useState<Agent | null | undefined>(undefined);
+  const [builderAgent, setBuilderAgent] = useState<BuilderTarget | undefined>(undefined);
+
+  const conversations = useConversations();
+  const tags = useTags();
+  const agents = useAgents();
 
   const setTweak = (patch: Partial<TweakState>) => setTweaks((s) => ({ ...s, ...patch }));
 
@@ -46,13 +60,50 @@ export function App(): JSX.Element {
     document.body.style.backgroundImage = tweaks.grain ? "" : "none";
   }, [tweaks.theme, tweaks.grain]);
 
-  const tree = SAMPLE_TREE;
-  const linearThread = useMemo(
-    () => computeLinearThread(tree.activeLeaf, tree.nodes),
-    [tree.activeLeaf, tree.nodes],
-  );
+  // Auto-select the first conversation when the list loads.
+  useEffect(() => {
+    if (activeConv === null && conversations.data && conversations.data.length > 0) {
+      setActiveConv(conversations.data[0].id);
+    }
+  }, [activeConv, conversations.data]);
 
-  void activeConv;
+  const thread = useThread(activeConv);
+
+  const linearThread = useMemo(() => {
+    if (!thread.state.tree.activeLeaf) return [] as MessageNode[];
+    return computeLinearThread(thread.state.tree.activeLeaf, thread.state.tree.nodes);
+  }, [thread.state.tree]);
+
+  const agentList = ["all", ...(tags.data?.map((t) => t.name) ?? [])];
+
+  const onNewChat = async () => {
+    try {
+      const created = await createConversation({});
+      await conversations.reload();
+      setActiveConv(created.id);
+    } catch (err) {
+      console.error("createConversation failed", err);
+    }
+  };
+
+  const onEditNode = async (nodeId: string, content: string, ripple: boolean) => {
+    await editNode(nodeId, { content, ripple });
+    await thread.reload();
+  };
+
+  const onRegenerate = async (nodeId: string) => {
+    await regenerateNode(nodeId);
+    await thread.reload();
+  };
+
+  const activeConvMeta = useMemo(() => {
+    if (!activeConv) return null;
+    return conversations.data?.find((c) => c.id === activeConv) ?? null;
+  }, [activeConv, conversations.data]);
+
+  const headerTitle = thread.conversation?.title ?? activeConvMeta?.title ?? "";
+  const headerAgent = thread.conversation?.agent ?? activeConvMeta?.agent ?? "Assistant";
+  const enabledToolCount = 4;
 
   return (
     <div
@@ -69,9 +120,9 @@ export function App(): JSX.Element {
         <div className="crumb">
           <span>Workspace</span>
           <span className="sep">/</span>
-          <span>Pinned</span>
+          <span>{activeConvMeta?.folder ?? ""}</span>
           <span className="sep">/</span>
-          <span className="current">Retry policy refactor</span>
+          <span className="current">{headerTitle}</span>
         </div>
         <div className="topbar-right">
           <div className="layout-switch" title="Layout">
@@ -150,22 +201,25 @@ export function App(): JSX.Element {
       </header>
 
       <Sidebar
-        activeConv={activeConv}
+        conversations={conversations.data ?? []}
+        loading={conversations.status === "loading"}
+        error={conversations.error}
+        activeConv={activeConv ?? ""}
         setActiveConv={setActiveConv}
         activeTag={activeTag}
         setActiveTag={setActiveTag}
-        onNewChat={() => setActiveConv("new")}
+        tags={agentList}
+        onNewChat={() => void onNewChat()}
         onOpenTree={() => setShowTree(true)}
         onOpenAgents={() => setShowAgents(true)}
       />
 
       <main className="center">
         <div className="thread-head">
-          <div className="thread-title serif">Refactoring the retry policy in orders-service</div>
+          <div className="thread-title serif">{headerTitle}</div>
           <div className="agent-chip">
-            <span className="agent-dot">C</span>
-            Code Reviewer
-            <span className="pill mono">claude-sonnet-4.5</span>
+            <span className="agent-dot">{headerAgent.slice(0, 1).toUpperCase()}</span>
+            {headerAgent}
           </div>
           <div className="thread-actions">
             <button className="icon-btn" title="Share">
@@ -184,76 +238,65 @@ export function App(): JSX.Element {
         </div>
 
         <div className="thread">
+          {thread.status === "loading" && linearThread.length === 0 && (
+            <div className="ornament" style={{ color: "var(--ink-3)" }}>
+              Loading conversation…
+            </div>
+          )}
+          {thread.status === "error" && (
+            <div
+              className="ornament"
+              style={{ color: "var(--crimson)", flexDirection: "column" }}
+            >
+              {thread.error}
+            </div>
+          )}
+
           {linearThread.map((n, i) => (
             <Message
               key={n.id}
               node={n}
               index={i + 1}
+              onEdit={
+                n.role === "user"
+                  ? (draft, opts) => onEditNode(n.id, draft, opts.ripple)
+                  : () => onRegenerate(n.id)
+              }
               onBranch={() => setShowTree(true)}
             />
           ))}
 
-          <div className="msg">
-            <div className="msg-num" />
-            <div className="msg-body">
-              <StatusLine state={tweaks.status} tool="run_tests" elapsed="3.8s" />
+          {linearThread.some((n) => n.streaming) && (
+            <div className="msg">
+              <div className="msg-num" />
+              <div className="msg-body">
+                <StatusLine state={tweaks.status} tool="run_tests" elapsed="…" />
+              </div>
+              <div className="msg-gutter" />
             </div>
-            <div className="msg-gutter" />
-          </div>
+          )}
 
-          <div className="ornament">❧ · ❦</div>
+          {linearThread.length > 0 && <div className="ornament">❧ · ❦</div>}
         </div>
 
-        <div className="composer-wrap">
-          <div className="composer">
-            <div className="composer-top">
-              <span className="composer-chip selected">
-                <Icon name="users" size={10} /> Code Reviewer
-              </span>
-              <span className="composer-chip">
-                <Icon name="tool" size={10} /> 4 tools
-              </span>
-              <span className="composer-chip">
-                <Icon name="attach" size={10} /> repo: orders-service
-              </span>
-              <span className="composer-chip">
-                <Icon name="brain" size={10} /> reasoning · high
-              </span>
-              <span style={{ flex: 1 }} />
-              <span className="smallcaps" style={{ color: "var(--ink-4)" }}>
-                8 132 / 200k tokens
-              </span>
-            </div>
-            <textarea placeholder="Ask Code Reviewer… ( / for commands · @ for agents · # for files )" />
-            <div className="composer-foot">
-              <button className="icon-btn">
-                <Icon name="attach" size={13} />
-              </button>
-              <button className="icon-btn">
-                <Icon name="tool" size={13} />
-              </button>
-              <button className="icon-btn">
-                <Icon name="brain" size={13} />
-              </button>
-              <div className="spacer" />
-              <span className="smallcaps" style={{ color: "var(--ink-4)" }}>
-                shift-return for newline
-              </span>
-              <button className="send-btn">
-                Send <kbd>↵</kbd>
-              </button>
-            </div>
-          </div>
-        </div>
+        <Composer
+          agentName={headerAgent}
+          enabledToolCount={enabledToolCount}
+          onSend={(content) => thread.send(content)}
+          disabled={!activeConv || thread.status !== "ready"}
+        />
 
         {tweaks.canvas && <CanvasPane onClose={() => setTweak({ canvas: false })} />}
       </main>
 
       <Inspector />
 
-      {showTree && <TreeView onClose={() => setShowTree(false)} />}
+      {showTree && activeConv && (
+        <TreeView tree={thread.state.tree} onClose={() => setShowTree(false)} />
+      )}
       {showAgents && builderAgent === undefined && (
         <AgentGallery
+          agents={agents.data ?? []}
           onClose={() => setShowAgents(false)}
           onOpenBuilder={(a) => setBuilderAgent(a)}
         />
@@ -264,6 +307,7 @@ export function App(): JSX.Element {
           onClose={() => {
             setBuilderAgent(undefined);
             setShowAgents(false);
+            void agents.reload();
           }}
         />
       )}

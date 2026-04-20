@@ -1,28 +1,38 @@
 import { Icon } from "./Icon";
-import { SAMPLE_CONVERSATIONS, SAMPLE_TAGS } from "../data/sample";
+import type { Conversation } from "../types";
 
 export interface SidebarProps {
+  conversations: Conversation[];
+  loading: boolean;
+  error: string | null;
   activeConv: string;
   setActiveConv: (id: string) => void;
   activeTag: string;
   setActiveTag: (tag: string) => void;
+  tags: string[];
   onNewChat: () => void;
   onOpenTree: () => void;
   onOpenAgents: () => void;
+  onSearch?: (q: string) => void;
 }
 
 const FOLDERS = ["Pinned", "Today", "This week", "Earlier"];
 
 export function Sidebar({
+  conversations,
+  loading,
+  error,
   activeConv,
   setActiveConv,
   activeTag,
   setActiveTag,
+  tags,
   onNewChat,
   onOpenTree,
   onOpenAgents,
+  onSearch,
 }: SidebarProps): JSX.Element {
-  const convs = SAMPLE_CONVERSATIONS.filter(
+  const visible = conversations.filter(
     (c) => activeTag === "all" || c.tag === activeTag,
   );
 
@@ -36,11 +46,14 @@ export function Sidebar({
       </div>
       <div className="search">
         <Icon name="search" size={13} />
-        <input placeholder="Search threads, messages, agents…" />
+        <input
+          placeholder="Search threads, messages, agents…"
+          onChange={(e) => onSearch?.(e.target.value)}
+        />
         <kbd>⌘K</kbd>
       </div>
       <div className="tag-row">
-        {SAMPLE_TAGS.map((t) => (
+        {tags.map((t) => (
           <button
             key={t}
             className={`tag ${activeTag === t ? "active" : ""}`}
@@ -51,8 +64,22 @@ export function Sidebar({
         ))}
       </div>
       <div className="conv-list">
+        {loading && conversations.length === 0 && (
+          <div className="folder-head" style={{ color: "var(--ink-3)" }}>
+            <span>Loading…</span>
+          </div>
+        )}
+        {error && (
+          <div
+            className="folder-head"
+            style={{ color: "var(--crimson)", flexDirection: "column", alignItems: "stretch" }}
+          >
+            <span>Cannot reach server</span>
+            <span style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 2 }}>{error}</span>
+          </div>
+        )}
         {FOLDERS.map((f) => {
-          const items = convs.filter((c) => c.folder === f);
+          const items = visible.filter((c) => c.folder === f);
           if (!items.length) return null;
           return (
             <div key={f}>

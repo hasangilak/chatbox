@@ -143,7 +143,7 @@ export function applyEvent(state: ThreadState, ev: BusEvent): ThreadState {
         ...state,
         ...withEventId,
         tree: patchNode(state.tree, ev.node_id, {
-          approval: ev.approval,
+          approval: { ...ev.approval, id: ev.approval_id },
           status: "approval",
         }),
       };
@@ -156,7 +156,7 @@ export function applyEvent(state: ThreadState, ev: BusEvent): ThreadState {
         ...state,
         ...withEventId,
         tree: patchNode(state.tree, ev.node_id, {
-          clarify: ev.clarify,
+          clarify: { ...ev.clarify, id: ev.clarify_id },
           status: "approval",
         }),
       };
