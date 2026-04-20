@@ -5,6 +5,7 @@ export interface ThreadState {
   tree: MessageTree;
   lastEventId: string | null;
   lastError: string | null;
+  artifactBumpKey: number;
 }
 
 export const emptyTree: MessageTree = {
@@ -17,6 +18,7 @@ export const initialThreadState: ThreadState = {
   tree: emptyTree,
   lastEventId: null,
   lastError: null,
+  artifactBumpKey: 0,
 };
 
 function upsertNode(tree: MessageTree, node: MessageNode): MessageTree {
@@ -172,7 +174,11 @@ export function applyEvent(state: ThreadState, ev: BusEvent): ThreadState {
       };
 
     case "artifact.updated":
-      return { ...state, ...withEventId };
+      return {
+        ...state,
+        ...withEventId,
+        artifactBumpKey: state.artifactBumpKey + 1,
+      };
 
     case "error":
       return { ...state, ...withEventId, lastError: ev.message };

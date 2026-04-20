@@ -45,7 +45,10 @@ function reducer(state: ReducerState, action: Action): ReducerState {
     case "load/success":
       return {
         status: "ready",
-        thread: action.thread,
+        thread: {
+          ...action.thread,
+          artifactBumpKey: action.thread.artifactBumpKey,
+        },
         conversation: action.conversation,
         error: null,
       };
@@ -82,6 +85,7 @@ export function useThread(conversationId: string | null): ThreadHook {
           tree: detail.tree,
           lastEventId: null,
           lastError: null,
+          artifactBumpKey: 0,
         },
       });
     } catch (err) {

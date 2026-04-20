@@ -1,98 +1,133 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "./Icon";
 import { syntaxHighlight } from "../utils/syntaxHighlight";
+import {
+  diffArtifact,
+  getArtifact,
+  listArtifactVersions,
+  listConversationArtifacts,
+} from "../api/artifacts";
+import type {
+  Artifact,
+  ArtifactDetail,
+  ArtifactDiffResponse,
+  ArtifactVersion,
+} from "../api/wire";
 
 export interface CanvasPaneProps {
+  conversationId: string | null;
   onClose: () => void;
+  /** Event bump to re-fetch artifacts when `artifact.updated` fires. */
+  bumpKey?: number;
 }
 
 type CanvasTab = "preview" | "diff" | "history";
 
-const SAMPLE_CODE = `export interface RetryOptions {
-  deadlineMs: number;
-  baseMs?: number;
-  capMs?: number;
-  shouldRetry?: (err: unknown, attempt: number) => boolean;
-}
-
-const bucket = new TokenBucket({ capacity: 100, refillPerSec: 10 });
-
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  opts: RetryOptions,
-): Promise<T> {
-  const deadline = Date.now() + opts.deadlineMs;
-  const base = opts.baseMs ?? 100;
-  const cap  = opts.capMs  ?? 10_000;
-
-  const parent = tracer.startSpan("retry.call", {
-    attributes: { "retry.deadline_ms": opts.deadlineMs }
-  });
-
-  let attempt = 0;
-  try {
-    while (true) {
-      const span = tracer.startSpan("retry.attempt",
-        { attributes: { "retry.attempt": attempt } },
-        trace.setSpan(context.active(), parent));
-      try {
-        return await fn();
-      } catch (err) {
-        if (!bucket.tryTake()) throw err;
-        if (!defaultShouldRetry(err, attempt)) throw err;
-        const sleepMs = Math.random() * Math.min(cap, base * 2 ** attempt);
-        if (Date.now() + sleepMs > deadline) throw err;
-        await sleep(sleepMs);
-        attempt++;
-      } finally {
-        span.end();
-      }
-    }
-  } finally {
-    parent.end();
-  }
-}`;
-
-const DIFF_CODE = `- export async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
--   let lastErr;
--   for (let i = 0; i < attempts; i++) {
--     try { return await fn(); }
--     catch (e) { lastErr = e; }
--   }
--   throw lastErr;
-- }
-+ export async function withRetry<T>(
-+   fn: () => Promise<T>,
-+   opts: RetryOptions,
-+ ): Promise<T> {
-+   const deadline = Date.now() + opts.deadlineMs;
-+   const base = opts.baseMs ?? 100;
-+   const cap  = opts.capMs  ?? 10_000;
-+   // full-jitter, deadline-aware, with token-bucket budget and OTel spans.
-+   /* ... */
-+ }`;
-
-interface HistoryEntry {
-  v: string;
-  ago: string;
-  msg: string;
-  author: string;
-}
-
-const HISTORY: HistoryEntry[] = [
-  { v: "v3", ago: "just now", msg: "Added OTel spans around each attempt", author: "Assistant" },
-  { v: "v2", ago: "1m ago", msg: "Deadline-aware + full-jitter + budget", author: "Assistant" },
-  { v: "v1", ago: "2m ago", msg: "Initial read — pre-existing code", author: "Assistant" },
-];
-
-export function CanvasPane({ onClose }: CanvasPaneProps): JSX.Element {
+export function CanvasPane({
+  conversationId,
+  onClose,
+  bumpKey = 0,
+}: CanvasPaneProps): JSX.Element {
   const [tab, setTab] = useState<CanvasTab>("preview");
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ArtifactDetail | null>(null);
+  const [versions, setVersions] = useState<ArtifactVersion[]>([]);
+  const [diff, setDiff] = useState<ArtifactDiffResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!conversationId) {
+      setArtifacts([]);
+      setActiveId(null);
+      return;
+    }
+    let cancelled = false;
+    listConversationArtifacts(conversationId)
+      .then((list) => {
+        if (cancelled) return;
+        setArtifacts(list);
+        setActiveId((prev) => prev ?? list[0]?.id ?? null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, bumpKey]);
+
+  useEffect(() => {
+    if (!activeId) {
+      setDetail(null);
+      setVersions([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([getArtifact(activeId), listArtifactVersions(activeId)])
+      .then(([d, vs]) => {
+        if (cancelled) return;
+        setDetail(d);
+        setVersions(vs);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, bumpKey]);
+
+  useEffect(() => {
+    if (tab !== "diff" || !activeId || versions.length < 2) {
+      setDiff(null);
+      return;
+    }
+    let cancelled = false;
+    const from = versions[1]?.version;
+    const to = versions[0]?.version;
+    if (!from || !to) return;
+    diffArtifact(activeId, from, to)
+      .then((d) => {
+        if (!cancelled) setDiff(d);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, activeId, versions]);
+
+  const currentContent = useMemo(() => detail?.current_version?.content ?? "", [detail]);
+
   return (
     <div className="canvas-pane">
       <div className="canvas-head">
         <Icon name="paper" size={15} />
-        <div className="canvas-title">retry.ts</div>
-        <span className="smallcaps">artifact · v3</span>
+        <select
+          className="select"
+          value={activeId ?? ""}
+          onChange={(e) => setActiveId(e.target.value || null)}
+          style={{ maxWidth: 220 }}
+        >
+          {!artifacts.length && <option value="">no artifacts</option>}
+          {artifacts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.title}
+            </option>
+          ))}
+        </select>
+        <span className="smallcaps">
+          {detail?.current_version ? `v${detail.current_version.version}` : "artifact"}
+        </span>
         <div className="canvas-tabs">
           <button className={tab === "preview" ? "active" : ""} onClick={() => setTab("preview")}>
             Preview
@@ -109,29 +144,47 @@ export function CanvasPane({ onClose }: CanvasPaneProps): JSX.Element {
         </button>
       </div>
       <div className="canvas-body">
-        {tab === "preview" && (
+        {error && <div style={{ color: "var(--crimson)" }}>{error}</div>}
+        {loading && !detail && <div style={{ color: "var(--ink-3)" }}>Loading artifact…</div>}
+        {!activeId && !loading && !artifacts.length && (
+          <div style={{ color: "var(--ink-3)" }}>
+            This conversation has no artifacts yet. The <code>write_file</code> tool creates one
+            when approved.
+          </div>
+        )}
+
+        {tab === "preview" && currentContent && (
           <pre
             style={{ margin: 0, whiteSpace: "pre-wrap" }}
-            dangerouslySetInnerHTML={{ __html: syntaxHighlight(SAMPLE_CODE) }}
+            dangerouslySetInnerHTML={{ __html: syntaxHighlight(currentContent) }}
           />
         )}
+
         {tab === "diff" && (
-          <pre
-            style={{
-              margin: 0,
-              fontFamily: "JetBrains Mono, monospace",
-              fontSize: 12,
-              lineHeight: 1.6,
-            }}
-          >
-            {DIFF_CODE}
-          </pre>
+          <>
+            {versions.length < 2 && (
+              <div style={{ color: "var(--ink-3)" }}>Need at least two versions to diff.</div>
+            )}
+            {diff && (
+              <pre
+                style={{
+                  margin: 0,
+                  fontFamily: "JetBrains Mono, monospace",
+                  fontSize: 12,
+                  lineHeight: 1.6,
+                }}
+              >
+                {diff.unified}
+              </pre>
+            )}
+          </>
         )}
+
         {tab === "history" && (
           <div style={{ fontFamily: "IBM Plex Sans" }}>
-            {HISTORY.map((h) => (
+            {versions.map((h) => (
               <div
-                key={h.v}
+                key={h.id}
                 style={{
                   border: "1px solid var(--rule)",
                   padding: 10,
@@ -142,10 +195,10 @@ export function CanvasPane({ onClose }: CanvasPaneProps): JSX.Element {
               >
                 <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                   <span className="serif" style={{ fontSize: 14, fontWeight: 500 }}>
-                    {h.v}
+                    v{h.version}
                   </span>
                   <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
-                    {h.ago} · {h.author}
+                    {new Date(h.created_at).toLocaleString()} · {h.author}
                   </span>
                 </div>
                 <div
@@ -157,7 +210,7 @@ export function CanvasPane({ onClose }: CanvasPaneProps): JSX.Element {
                     marginTop: 2,
                   }}
                 >
-                  {h.msg}
+                  {h.message}
                 </div>
               </div>
             ))}

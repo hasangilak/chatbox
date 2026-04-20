@@ -286,7 +286,13 @@ export function App(): JSX.Element {
           disabled={!activeConv || thread.status !== "ready"}
         />
 
-        {tweaks.canvas && <CanvasPane onClose={() => setTweak({ canvas: false })} />}
+        {tweaks.canvas && (
+          <CanvasPane
+            conversationId={activeConv}
+            bumpKey={thread.state.artifactBumpKey}
+            onClose={() => setTweak({ canvas: false })}
+          />
+        )}
       </main>
 
       <Inspector conversationId={activeConv} agentName={headerAgent} />
