@@ -8,10 +8,16 @@ import { TreeView } from "./components/TreeView";
 import { AgentGallery, AgentBuilder } from "./components/agents";
 import { CanvasPane } from "./components/CanvasPane";
 import { TweaksPanel } from "./components/TweaksPanel";
+import { SearchPalette } from "./components/SearchPalette";
 import { useThread } from "./state/useThread";
 import { useAgents, useConversations, useTags } from "./state/useWorkspace";
-import { createConversation } from "./api/conversations";
+import {
+  createConversation,
+  exportUrl,
+  shareConversation,
+} from "./api/conversations";
 import { editNode, regenerateNode } from "./api/nodes";
+import { YAP_BASE_URL } from "./env";
 import type { Agent, MessageNode, TweakState } from "./types";
 import type { AgentFull } from "./api/wire";
 
@@ -48,6 +54,9 @@ export function App(): JSX.Element {
   const [showTree, setShowTree] = useState<boolean>(false);
   const [showAgents, setShowAgents] = useState<boolean>(false);
   const [builderAgent, setBuilderAgent] = useState<BuilderTarget | undefined>(undefined);
+  const [searchOpen, setSearchOpen] = useState<boolean>(false);
+  const [searchSeed, setSearchSeed] = useState<string>("");
+  const [shareMsg, setShareMsg] = useState<string | null>(null);
 
   const conversations = useConversations();
   const tags = useTags();
@@ -59,6 +68,21 @@ export function App(): JSX.Element {
     document.documentElement.setAttribute("data-theme", tweaks.theme);
     document.body.style.backgroundImage = tweaks.grain ? "" : "none";
   }, [tweaks.theme, tweaks.grain]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+      if (e.key === "Escape") {
+        setSearchOpen(false);
+        setShowTweaks(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Auto-select the first conversation when the list loads.
   useEffect(() => {
@@ -94,6 +118,27 @@ export function App(): JSX.Element {
   const onRegenerate = async (nodeId: string) => {
     await regenerateNode(nodeId);
     await thread.reload();
+  };
+
+  const onShare = async () => {
+    if (!activeConv) return;
+    try {
+      const res = await shareConversation(activeConv);
+      await navigator.clipboard
+        .writeText(res.public_url)
+        .catch(() => undefined);
+      setShareMsg(`Share URL copied: ${res.public_url}`);
+      setTimeout(() => setShareMsg(null), 4000);
+    } catch (err) {
+      setShareMsg(err instanceof Error ? err.message : String(err));
+      setTimeout(() => setShareMsg(null), 4000);
+    }
+  };
+
+  const onExport = (format: "md" | "json") => {
+    if (!activeConv) return;
+    const path = exportUrl(activeConv, format);
+    window.open(YAP_BASE_URL + path, "_blank", "noopener");
   };
 
   const activeConvMeta = useMemo(() => {
@@ -212,6 +257,10 @@ export function App(): JSX.Element {
         onNewChat={() => void onNewChat()}
         onOpenTree={() => setShowTree(true)}
         onOpenAgents={() => setShowAgents(true)}
+        onSearch={(q) => {
+          setSearchSeed(q);
+          if (q) setSearchOpen(true);
+        }}
       />
 
       <main className="center">
@@ -222,10 +271,20 @@ export function App(): JSX.Element {
             {headerAgent}
           </div>
           <div className="thread-actions">
-            <button className="icon-btn" title="Share">
+            <button
+              className="icon-btn"
+              title="Share"
+              onClick={() => void onShare()}
+              disabled={!activeConv}
+            >
               <Icon name="share" size={13} />
             </button>
-            <button className="icon-btn" title="Export">
+            <button
+              className="icon-btn"
+              title="Export markdown"
+              onClick={() => onExport("md")}
+              disabled={!activeConv}
+            >
               <Icon name="export" size={13} />
             </button>
             <button className="icon-btn" title="Pin">
@@ -236,6 +295,21 @@ export function App(): JSX.Element {
             </button>
           </div>
         </div>
+
+        {shareMsg && (
+          <div
+            style={{
+              margin: "6px 22px",
+              padding: "6px 10px",
+              background: "var(--sage-wash)",
+              border: "1px solid var(--sage)",
+              borderRadius: 2,
+              fontSize: 12,
+            }}
+          >
+            {shareMsg}
+          </div>
+        )}
 
         <div className="thread">
           {thread.status === "loading" && linearThread.length === 0 && (
@@ -320,6 +394,17 @@ export function App(): JSX.Element {
 
       {showTweaks && (
         <TweaksPanel state={tweaks} set={setTweak} onClose={() => setShowTweaks(false)} />
+      )}
+
+      {searchOpen && (
+        <SearchPalette
+          initialQuery={searchSeed}
+          onClose={() => setSearchOpen(false)}
+          onOpenConversation={(id) => {
+            setActiveConv(id);
+            setSearchOpen(false);
+          }}
+        />
       )}
     </div>
   );
