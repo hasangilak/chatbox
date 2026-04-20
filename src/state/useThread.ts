@@ -4,6 +4,7 @@ import { subscribeStream } from "../api/client";
 import { getConversation, postMessage } from "../api/conversations";
 import {
   applyEvent,
+  emptyTree,
   initialThreadState,
   type ThreadState,
 } from "./threadReducer";
@@ -82,7 +83,7 @@ export function useThread(conversationId: string | null): ThreadHook {
         type: "load/success",
         conversation: detail.conversation,
         thread: {
-          tree: detail.tree,
+          tree: detail.tree ?? emptyTree,
           lastEventId: null,
           lastError: null,
           artifactBumpKey: 0,
