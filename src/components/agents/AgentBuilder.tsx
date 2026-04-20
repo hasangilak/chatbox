@@ -4,6 +4,7 @@ import { useTools } from "../../state/useWorkspace";
 import {
   createAgent,
   getAgentFull,
+  getEvalRun,
   listAgentVersions,
   optimizeAgent,
   patchAgent,
@@ -211,9 +212,6 @@ export function AgentBuilder({ agent, onClose }: AgentBuilderProps): JSX.Element
     setEvalBusy(true);
     try {
       const { job_id } = await startEval(draft.id);
-      // Simplest-llm's eval is synthesized synchronously today, so a single
-      // fetch returns the result. For an async backend, swap for polling.
-      const { getEvalRun } = await import("../../api/agents");
       const result = await getEvalRun(draft.id, job_id);
       setEvalRun(result);
     } catch (err) {

@@ -34,23 +34,77 @@ npm run format     # prettier --write .
 
 Fonts (Fraunces, IBM Plex Sans, JetBrains Mono) are pulled from Google Fonts via `index.html`.
 
+## Connecting to the yap server
+
+This client talks to the [yap server](https://github.com/hasangilak/simplest-llm) (local path: `/Users/hassangilak/Work/simplest-llm`). Copy `.env.example` to `.env` and set:
+
+```
+VITE_YAP_BASE_URL=http://localhost:3001/api/v1
+VITE_YAP_TOKEN=            # optional, only if server was started with YAP_API_TOKEN
+```
+
+In one terminal, bring yap up:
+
+```bash
+cd /Users/hassangilak/Work/simplest-llm
+docker compose up -d postgres
+pnpm install && pnpm db:push && pnpm dev     # yap on :3001
+curl -sX POST http://localhost:3001/api/v1/dev/seed   # load sample data
+```
+
+Then `npm run dev` in this repo — the sidebar will populate from the server.
+
+### What is wired
+
+- Sidebar → `GET /conversations`, filter by tag
+- Thread → `GET /conversations/:id` + SSE `/conversations/:id/stream`; reducer applies every `BusEvent`
+- Composer → `POST /conversations/:id/messages`
+- ApprovalCard → `POST /approvals/:id/decide`
+- Clarify → `POST /clarify/:id/answer`
+- Message edit / TreeView actions → `/nodes/:id/edit|branch|regenerate|prune`
+- AgentGallery → `GET /agents` + `/agent-templates`
+- AgentBuilder → `GET /agents/:id/full`, `PATCH /agents/:id`, versions, restore, optimize, eval
+- Inspector Timeline → `GET /conversations/:id/timeline`
+- Inspector Notes → `GET/PUT /notes` + pinned snippets CRUD
+- Inspector Agent → `GET /agents` + `GET /agents/:id/full`
+- CanvasPane → `GET /conversations/:id/artifacts` + `/artifacts/:id` + versions + diff; re-fetches on `artifact.updated`
+- ⌘K SearchPalette → `GET /search`
+- Thread head Share/Export → `POST /conversations/:id/share` and `/export?format=md`
+
+Auth is optional: set `VITE_YAP_TOKEN` to send `Authorization: Bearer <token>` on every request. SSE uses fetch streaming (not `EventSource`) so auth headers work.
+
 ## Project layout
 
 ```
 ├── index.html                    Vite entry — loads /src/main.tsx
+├── docs/server-spec.md           What the client expects from any backend
 ├── src/
 │   ├── main.tsx                  React 18 strict-mode entry
 │   ├── App.tsx                   Top-level shell: topbar, sidebar, thread, overlays
 │   ├── styles.css                Full design system (tokens, layouts, components)
-│   ├── types.ts                  Shared TypeScript types
-│   ├── data/sample.ts            Sample conversations, agents, message tree, tools
-│   ├── utils/syntaxHighlight.ts  JSON / code syntax highlighter
+│   ├── types.ts                  Shared TypeScript types (client ↔ wire)
+│   ├── env.ts                    VITE_YAP_BASE_URL / VITE_YAP_TOKEN
+│   ├── vite-env.d.ts             import.meta.env typings
+│   ├── api/                      HTTP + SSE client
+│   │   ├── client.ts             fetch wrapper, ApiError, fetch-based SSE
+│   │   ├── events.ts             BusEvent union (16 kinds)
+│   │   ├── wire.ts               AgentFull, AgentVersion, Artifact, Tag, Timeline, ...
+│   │   ├── conversations.ts · nodes.ts · agents.ts · approvals.ts
+│   │   ├── clarify.ts · artifacts.ts · tags.ts · tools.ts · search.ts
+│   │   └── index.ts              barrel
+│   ├── state/                    React hooks + pure reducers
+│   │   ├── threadReducer.ts      pure reducer over BusEvent
+│   │   ├── useThread.ts          load conversation, subscribe to stream, send messages
+│   │   ├── useAsync.ts           minimal fetch-on-mount + reload
+│   │   └── useWorkspace.ts       useConversations, useAgents, useTags, useTools, ...
 │   └── components/
 │       ├── Icon.tsx              Inline SVG icon set
 │       ├── Sidebar.tsx           Conversation list + search + tags
-│       ├── CanvasPane.tsx        Artifact pane with preview/diff/history
+│       ├── Composer.tsx          Message composer
+│       ├── CanvasPane.tsx        Artifact pane (preview/diff/history)
 │       ├── TweaksPanel.tsx       Theme/layout/status toggles
 │       ├── TreeView.tsx          Message tree overlay with SVG edges
+│       ├── SearchPalette.tsx     ⌘K search modal
 │       ├── message/              Thread messages
 │       │   ├── Message.tsx       (container)
 │       │   ├── ReasoningBlock.tsx
