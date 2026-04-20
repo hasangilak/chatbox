@@ -10,3 +10,4 @@ dist-ssr
 coverage
 *.tsbuildinfo
 .claude/
+.playwright-mcp/
