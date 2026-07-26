@@ -22,7 +22,7 @@ Anything beyond a blank sidebar needs that backend running: postgres, Ollama wit
 
 ## Architecture
 
-**`src/api/` — the only place that talks to the network.** `client.ts` owns `fetch`, `ApiError`, and URL building; every non-GET automatically gets an `Idempotency-Key` header. Components never call `fetch` directly — add a typed function to the relevant `api/*.ts` module instead. Wire types live in `api/wire.ts`; `types.ts` holds the shapes shared between client and wire.
+**`src/api/` — the only place that talks to the network.** `client.ts` owns `fetch`, `ApiError`, and URL building; every non-GET automatically gets an `Idempotency-Key` header. Components never call `fetch` directly — add a typed function to the relevant `api/*.ts` module instead. Wire types live in `src/api/wire.ts`; `src/types.ts` holds the shapes shared between client and wire.
 
 **SSE is fetch-based, not `EventSource`.** `subscribeStream()` in `client.ts` reads the response body and splits on `\n\n` frames — this exists so `Authorization` headers work. It returns an abort function.
 
@@ -43,9 +43,11 @@ Anything beyond a blank sidebar needs that backend running: postgres, Ollama wit
 
 - TS is strict with `noUnusedLocals` / `noUnusedParameters`; unused args must be `_`-prefixed to pass lint.
 - Exported components and API functions carry explicit return types (`: JSX.Element`, `: Promise<T>`).
-- Prettier: double quotes, semicolons, trailing commas, 100 cols.
-- commit the changes gradually and dont mention yoursled in the commit
+- Prettier: double quotes, semicolons, trailing commas, 100 cols. `CLAUDE.md` and `README.md` are in scope for `prettier --write .` — keep them formatted so docs edits don't leak into unrelated commits.
 
+## Git
+
+Commit gradually: one small, logical commit per coherent unit of work, conventional-commit prefix (`docs:`, `feat:`, `fix:`, `chore:`). Commit messages must not mention Claude, Claude Code, or any AI authorship — no `Co-Authored-By` trailer.
 
 ## Known stubs
 
