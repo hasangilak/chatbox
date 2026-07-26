@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Workbench — a React 18 + TypeScript + Vite **frontend only**. It is a thin client over the **yap** server (local checkout: `/Users/hassangilak/Work/yap`; the README's `simplest-llm` path is stale). All domain state lives on the server; this repo owns rendering, the SSE event reducer, and the design system.
+Workbench — a React 18 + TypeScript + Vite **frontend only**. It is a thin client over the [yap server](https://github.com/hasangilak/yap), a separate checkout. All domain state lives on the server; this repo owns rendering, the SSE event reducer, and the design system.
 
 ## Commands
 
@@ -18,16 +18,7 @@ npm run format     # prettier --write .
 
 There is **no test suite**. Verification = `npm run typecheck && npm run lint`, plus running against a live yap instance.
 
-Bringing up the backend (needed for anything beyond a blank sidebar):
-
-```bash
-cd /Users/hassangilak/Work/yap
-docker compose up -d postgres
-pnpm install && pnpm db:push && pnpm dev              # yap on :3001
-curl -sX POST http://localhost:3001/api/v1/dev/seed   # sample data
-```
-
-Then copy `.env.example` → `.env` (`VITE_YAP_BASE_URL`, optional `VITE_YAP_TOKEN`).
+Anything beyond a blank sidebar needs that backend running: postgres, Ollama with a model pulled, yap's own `.env` (Prisma's `DATABASE_URL` has no fallback), then `pnpm dev` in a terminal of its own. Follow **"Connecting to the yap server"** in `README.md` — those steps are kept correct there; do not restate them here.
 
 ## Architecture
 
@@ -53,6 +44,8 @@ Then copy `.env.example` → `.env` (`VITE_YAP_BASE_URL`, optional `VITE_YAP_TOK
 - TS is strict with `noUnusedLocals` / `noUnusedParameters`; unused args must be `_`-prefixed to pass lint.
 - Exported components and API functions carry explicit return types (`: JSX.Element`, `: Promise<T>`).
 - Prettier: double quotes, semicolons, trailing commas, 100 cols.
+- commit the changes gradually and dont mention yoursled in the commit
+
 
 ## Known stubs
 
