@@ -1,7 +1,7 @@
 import type {
-  ApprovalData,
-  ClarifyData,
   MessageNode,
+  PromptRequest,
+  PromptResponse,
   StatusState,
   ToolCallData,
   ToolStatus,
@@ -68,32 +68,40 @@ export interface ToolCallEndedEvent extends BaseEvent {
   error?: string;
 }
 
-export interface ApprovalRequestedEvent extends BaseEvent {
-  kind: "approval.requested";
+export interface PromptRequestedEvent extends BaseEvent {
+  kind: "prompt.requested";
   node_id: string;
-  approval_id: string;
-  approval: ApprovalData;
+  /** POST this id back to `/prompts/:id/respond`. */
+  prompt_id: string;
+  /** `ask_clarification` for clarify prompts. */
+  tool: string;
+  request: PromptRequest;
 }
 
-export interface ApprovalDecidedEvent extends BaseEvent {
-  kind: "approval.decided";
+export interface PromptRespondedEvent extends BaseEvent {
+  kind: "prompt.responded";
   node_id: string;
-  approval_id: string;
-  decision: "allow" | "always" | "deny";
+  prompt_id: string;
+  tool: string;
+  response: PromptResponse;
 }
 
-export interface ClarifyRequestedEvent extends BaseEvent {
-  kind: "clarify.requested";
+export interface InterjectionReceivedEvent extends BaseEvent {
+  kind: "interjection.received";
   node_id: string;
-  clarify_id: string;
-  clarify: ClarifyData;
+  interjection_id: string;
+  text: string;
+  /** true = a live model call was cut off; false = queued for the next round. */
+  aborted: boolean;
 }
 
-export interface ClarifyAnsweredEvent extends BaseEvent {
-  kind: "clarify.answered";
+export interface TurnCancelledEvent extends BaseEvent {
+  kind: "turn.cancelled";
   node_id: string;
-  clarify_id: string;
-  response: { selected_chip_ids: string[]; text: string };
+  /** true = a live model call was cut off. */
+  aborted: boolean;
+  /** true = the cancel endpoint closed the node itself (the turn was parked). */
+  finalized: boolean;
 }
 
 export interface ArtifactUpdatedEvent extends BaseEvent {
@@ -131,10 +139,10 @@ export type BusEvent =
   | ToolCallProposedEvent
   | ToolCallStartedEvent
   | ToolCallEndedEvent
-  | ApprovalRequestedEvent
-  | ApprovalDecidedEvent
-  | ClarifyRequestedEvent
-  | ClarifyAnsweredEvent
+  | PromptRequestedEvent
+  | PromptRespondedEvent
+  | InterjectionReceivedEvent
+  | TurnCancelledEvent
   | ArtifactUpdatedEvent
   | NodeFinalizedEvent
   | ActiveLeafChangedEvent

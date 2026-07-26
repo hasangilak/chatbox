@@ -1,4 +1,11 @@
-import type { MessageTree, Role } from "../types";
+import type {
+  ApprovalDecision,
+  MessageTree,
+  PromptKind,
+  PromptRequest,
+  PromptResponse,
+  Role,
+} from "../types";
 
 /* ---------- Agents ---------- */
 
@@ -8,10 +15,7 @@ export interface AgentVariable {
   description: string;
 }
 
-export type PermissionDefault =
-  | "ask_every_time"
-  | "auto_allow_read"
-  | "auto_allow_all";
+export type PermissionDefault = "ask_every_time" | "auto_allow_read" | "auto_allow_all";
 
 export interface AgentFull {
   id: string;
@@ -94,15 +98,71 @@ export interface EvalResult {
   delta_vs_previous_pct: number | null;
 }
 
-/* ---------- Approvals ---------- */
+/* ---------- Prompts (approvals + clarifications) ---------- */
 
-export type { ApprovalDecision } from "../types";
+export type {
+  ApprovalDecision,
+  ClarifyAnswer,
+  Prompt,
+  PromptKind,
+  PromptRequest,
+  PromptResponse,
+} from "../types";
+
+/** As the server stores a pause. `response` is null while the prompt is open. */
+export interface PromptRow {
+  id: string;
+  conversation_id: string;
+  node_id: string;
+  kind: PromptKind;
+  tool: string;
+  request: PromptRequest;
+  response: PromptResponse | null;
+  responded_at: string | null;
+  /** ISO 8601. Use it to age the card — a pause never expires. */
+  created_at: string;
+}
+
+/** The body of `POST /prompts/:id/respond`. The kind is read from the stored row. */
+export type RespondToPromptBody =
+  | { decision: ApprovalDecision; edited_args?: Record<string, unknown> }
+  | { selected_chip_ids?: string[]; text?: string };
+
+export interface RespondToPromptResponse {
+  ok: boolean;
+  prompt_id: string;
+  kind: PromptKind;
+  /** `false` means there was no paused turn to continue; still recorded. */
+  resumed: boolean;
+  /** `true` when the turn was already stopped, so it stays ended. */
+  cancelled?: boolean;
+}
+
+/* ---------- Grants ---------- */
 
 export interface Grant {
   key: string;
   agent_id: string;
   tool_id: string;
   created_at: string;
+}
+
+/* ---------- Interrupting a running turn ---------- */
+
+export interface CancelTurnResponse {
+  ok: boolean;
+  node_id: string;
+  /** `true` = a live model call was cut off. */
+  aborted: boolean;
+  /** `true` = the endpoint closed the node itself (the turn was parked). */
+  finalized: boolean;
+}
+
+export interface InterjectResponse {
+  ok: boolean;
+  interjection_id: string;
+  node_id: string;
+  aborted: boolean;
 }
 
 /* ---------- Artifacts ---------- */
@@ -172,14 +232,7 @@ export interface PinnedSnippet {
 
 /* ---------- Timeline ---------- */
 
-export type TimelineEventKind =
-  | "user"
-  | "reason"
-  | "tool"
-  | "clar"
-  | "perm"
-  | "stream"
-  | "error";
+export type TimelineEventKind = "user" | "reason" | "tool" | "clar" | "perm" | "stream" | "error";
 
 export interface TimelineEvent {
   id: string;

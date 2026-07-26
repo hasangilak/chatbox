@@ -1,7 +1,9 @@
 import type { Conversation, MessageNode, MessageTree } from "../types";
-import { api } from "./client";
+import { ApiError, api } from "./client";
 import type {
+  CancelTurnResponse,
   ConversationDetail,
+  InterjectResponse,
   PinnedSnippet,
   ShareResponse,
   ThreadNote,
@@ -32,11 +34,62 @@ export function createConversation(body: {
   return api.post<Conversation>("/conversations", body);
 }
 
+/**
+ * Append a user node and start an assistant turn. Returns the user node
+ * synchronously; everything after arrives on the stream.
+ *
+ * `parent` is omitted from the body when undefined rather than sent as `null`.
+ * The server distinguishes the two: absent means "append to the active leaf",
+ * while an explicit `null` means "no parent" — which roots every message and
+ * leaves the conversation a pile of two-node stubs.
+ */
 export function postMessage(
   conversationId: string,
   body: { content: string; parent?: string | null },
 ): Promise<MessageNode> {
-  return api.post<MessageNode>(`/conversations/${conversationId}/messages`, body);
+  const payload =
+    body.parent === undefined
+      ? { content: body.content }
+      : { content: body.content, parent: body.parent };
+  return api.post<MessageNode>(`/conversations/${conversationId}/messages`, payload);
+}
+
+/**
+ * The stop button: abort the model call and **end** the turn.
+ *
+ * A `409 no turn in flight` means it is already over — reported as `null` rather
+ * than thrown, since a second press on a stale button is the expected way there.
+ * Works on a turn parked on an approval too, which is the only way out for a
+ * user who doesn't want to decide.
+ */
+export async function cancelTurn(conversationId: string): Promise<CancelTurnResponse | null> {
+  try {
+    return await api.post<CancelTurnResponse>(`/conversations/${conversationId}/cancel`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) return null;
+    throw err;
+  }
+}
+
+/**
+ * Steer a turn that is **already running** without ending it — "actually, do it
+ * this way instead". Contrast `cancelTurn`, which stops it.
+ *
+ * `aborted: false` is not a failure: there was no live model call to interrupt,
+ * so the text is queued for the next round. `null` means no turn was in flight.
+ */
+export async function interject(
+  conversationId: string,
+  text: string,
+): Promise<InterjectResponse | null> {
+  try {
+    return await api.post<InterjectResponse>(`/conversations/${conversationId}/interject`, {
+      text,
+    });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) return null;
+    throw err;
+  }
 }
 
 export function getTimeline(conversationId: string): Promise<TimelineEvent[]> {
@@ -59,10 +112,7 @@ export function createPinnedSnippet(
   conversationId: string,
   body: { source_node_id: string; label: string; excerpt: string },
 ): Promise<PinnedSnippet> {
-  return api.post<PinnedSnippet>(
-    `/conversations/${conversationId}/pinned-snippets`,
-    body,
-  );
+  return api.post<PinnedSnippet>(`/conversations/${conversationId}/pinned-snippets`, body);
 }
 
 export function deletePinnedSnippet(id: string): Promise<void> {
