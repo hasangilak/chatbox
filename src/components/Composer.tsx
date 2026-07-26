@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { Icon } from "./Icon";
 
 export interface ComposerProps {
@@ -14,6 +14,13 @@ export interface ComposerProps {
   /** True while an assistant turn is in flight. */
   live?: boolean;
   disabled?: boolean;
+  /**
+   * Rendered directly above the input. The "jump to latest" pill lives here
+   * rather than being positioned against `.center` because the composer's
+   * height changes with the draft — anchoring to it is the only way the pill
+   * stays clear of the input without a magic offset.
+   */
+  jumpToLatest?: ReactNode;
 }
 
 function formatTokens(used: number | undefined, budget: number | undefined): string {
@@ -32,6 +39,7 @@ export function Composer({
   onSteer,
   live = false,
   disabled = false,
+  jumpToLatest,
 }: ComposerProps): JSX.Element {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -79,6 +87,7 @@ export function Composer({
 
   return (
     <div className="composer-wrap">
+      {jumpToLatest}
       <div className="composer">
         <div className="composer-top">
           <span className="composer-chip selected">

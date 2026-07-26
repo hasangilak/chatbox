@@ -10,6 +10,7 @@ import { CanvasPane } from "./components/CanvasPane";
 import { TweaksPanel } from "./components/TweaksPanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { useThread } from "./state/useThread";
+import { useStickToBottom } from "./state/useStickToBottom";
 import { promptsForNode } from "./state/threadReducer";
 import { useAgents, useConversations, useTags } from "./state/useWorkspace";
 import { createConversation, exportUrl, shareConversation } from "./api/conversations";
@@ -75,6 +76,10 @@ export function App(): JSX.Element {
   const [showAgents, setShowAgents] = useState<boolean>(false);
   const [builderAgent, setBuilderAgent] = useState<BuilderTarget | undefined>(undefined);
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
+  // Off-canvas drawers, used only below the two-pane breakpoint. Above it the
+  // sidebar and inspector are always-on grid columns and these are ignored.
+  const [navOpen, setNavOpen] = useState<boolean>(false);
+  const [inspectorOpen, setInspectorOpen] = useState<boolean>(false);
   const [searchSeed, setSearchSeed] = useState<string>("");
   const [shareMsg, setShareMsg] = useState<string | null>(null);
 
@@ -98,6 +103,8 @@ export function App(): JSX.Element {
       if (e.key === "Escape") {
         setSearchOpen(false);
         setShowTweaks(false);
+        setNavOpen(false);
+        setInspectorOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -141,6 +148,28 @@ export function App(): JSX.Element {
   }, [thread.state.tree, isLive]);
 
   const turnLive = useMemo(() => linearThread.some(isLive), [linearThread, isLive]);
+
+  /**
+   * Fingerprint of everything that grows *inside* the last message rather than
+   * adding one: streamed text, reasoning, a tool result landing, a prompt or
+   * interjection attaching. Changes to this pin the scroll instantly; a change
+   * in message count animates instead. See `useStickToBottom`.
+   */
+  const growthSignature = useMemo(() => {
+    const tail = linearThread[linearThread.length - 1];
+    if (!tail) return 0;
+    const reasoning = tail.reasoning?.join("").length ?? 0;
+    const tool = tail.toolCall ? JSON.stringify(tail.toolCall).length : 0;
+    const prompts = promptsForNode(thread.state, tail.id).length;
+    const interjections = thread.state.interjections[tail.id]?.length ?? 0;
+    return tail.content.length + reasoning + tool + prompts * 7919 + interjections * 104729;
+  }, [linearThread, thread.state]);
+
+  const stick = useStickToBottom({
+    itemCount: linearThread.length,
+    growthSignature,
+    resetKey: activeConv,
+  });
 
   const agentList = ["all", ...(tags.data?.map((t) => t.name) ?? [])];
 
@@ -201,6 +230,8 @@ export function App(): JSX.Element {
     <div
       className={`app layout-${tweaks.layout} ${tweaks.canvas ? "canvas-open" : ""}`}
       data-screen-label="Main · Workbench"
+      data-nav-open={navOpen ? "true" : "false"}
+      data-inspector-open={inspectorOpen ? "true" : "false"}
     >
       <header className="topbar">
         <div className="brand">
@@ -217,6 +248,27 @@ export function App(): JSX.Element {
           <span className="current">{headerTitle}</span>
         </div>
         <div className="topbar-right">
+          {/* Shown only once the panes collapse — see the responsive section
+              in styles.css. Without these, a narrow viewport has no way to
+              reach the conversation list at all. */}
+          <button
+            className="icon-btn narrow-only"
+            onClick={() => setNavOpen((v) => !v)}
+            title="Conversations"
+            aria-label="Toggle conversations"
+            aria-expanded={navOpen}
+          >
+            <Icon name="folder" size={14} />
+          </button>
+          <button
+            className="icon-btn narrow-only"
+            onClick={() => setInspectorOpen((v) => !v)}
+            title="Inspector"
+            aria-label="Toggle inspector"
+            aria-expanded={inspectorOpen}
+          >
+            <Icon name="book" size={14} />
+          </button>
           <div className="layout-switch" title="Layout">
             <button
               className={tweaks.layout === "atelier" ? "active" : ""}
@@ -285,7 +337,10 @@ export function App(): JSX.Element {
         loading={conversations.status === "loading"}
         error={conversations.error}
         activeConv={activeConv ?? ""}
-        setActiveConv={setActiveConv}
+        setActiveConv={(id) => {
+          setActiveConv(id);
+          setNavOpen(false);
+        }}
         activeTag={activeTag}
         setActiveTag={setActiveTag}
         tags={agentList}
@@ -346,57 +401,86 @@ export function App(): JSX.Element {
           </div>
         )}
 
-        <div className="thread">
-          {thread.status === "loading" && linearThread.length === 0 && (
-            <div className="ornament" style={{ color: "var(--ink-3)" }}>
-              Loading conversation…
-            </div>
-          )}
-          {thread.status === "error" && (
-            <div className="ornament" style={{ color: "var(--crimson)", flexDirection: "column" }}>
-              {thread.error}
-            </div>
-          )}
+        {/* tabIndex makes the thread focusable so PageUp/Home reach the
+            keydown listener in useStickToBottom, not just the body. */}
+        <div className="thread" ref={stick.scrollRef} tabIndex={-1}>
+          <div className="thread-inner" ref={stick.contentRef}>
+            {thread.status === "loading" && linearThread.length === 0 && (
+              <div className="ornament" style={{ color: "var(--ink-3)" }}>
+                Loading conversation…
+              </div>
+            )}
+            {thread.status === "error" && (
+              <div
+                className="ornament"
+                style={{ color: "var(--crimson)", flexDirection: "column" }}
+              >
+                {thread.error}
+              </div>
+            )}
 
-          {linearThread.map((n, i) => (
-            <Message
-              key={n.id}
-              node={n}
-              index={i + 1}
-              prompts={promptsForNode(thread.state, n.id)}
-              interjections={thread.state.interjections[n.id]}
-              cancellation={thread.state.cancelled[n.id]}
-              onRespond={thread.respond}
-              onEdit={
-                n.role === "user"
-                  ? (draft, opts) => onEditNode(n.id, draft, opts.ripple)
-                  : () => onRegenerate(n.id)
-              }
-              onBranch={() => setShowTree(true)}
-            />
-          ))}
+            {linearThread.map((n, i) => (
+              <Message
+                key={n.id}
+                node={n}
+                index={i + 1}
+                prompts={promptsForNode(thread.state, n.id)}
+                interjections={thread.state.interjections[n.id]}
+                cancellation={thread.state.cancelled[n.id]}
+                onRespond={thread.respond}
+                onEdit={
+                  n.role === "user"
+                    ? (draft, opts) => onEditNode(n.id, draft, opts.ripple)
+                    : () => onRegenerate(n.id)
+                }
+                onBranch={() => setShowTree(true)}
+              />
+            ))}
 
-          {threadError && (
-            <div className={`turn-error ${threadError.recoverable ? "" : "fatal"}`}>
-              <Icon name="bolt" size={12} />
-              <span>{threadError.message}</span>
-              {threadError.interruptedByRestart && lastAsstNode && (
-                <button className="btn btn-sm" onClick={() => void onRegenerate(lastAsstNode.id)}>
-                  Regenerate
-                </button>
-              )}
-            </div>
-          )}
+            {threadError && (
+              <div className={`turn-error ${threadError.recoverable ? "" : "fatal"}`}>
+                <Icon name="bolt" size={12} />
+                <span>{threadError.message}</span>
+                {threadError.interruptedByRestart && lastAsstNode && (
+                  <button className="btn btn-sm" onClick={() => void onRegenerate(lastAsstNode.id)}>
+                    Regenerate
+                  </button>
+                )}
+              </div>
+            )}
 
-          {linearThread.length > 0 && <div className="ornament">❧ · ❦</div>}
+            {linearThread.length > 0 && <div className="ornament">❧ · ❦</div>}
+          </div>
         </div>
 
         <Composer
           agentName={headerAgent}
           enabledToolCount={enabledToolCount}
-          onSend={(content) => thread.send(content)}
+          /* Only offered once we've actually stopped following, so it never
+             appears while the thread is already carrying the user down. */
+          jumpToLatest={
+            stick.hasUnseenBelow ? (
+              <button
+                className="jump-latest"
+                onClick={() => stick.followNow()}
+                title="Jump to latest"
+              >
+                <Icon name="chevd" size={12} />
+                {turnLive ? "Jump to latest — still writing" : "Jump to latest"}
+              </button>
+            ) : undefined
+          }
+          onSend={(content) => {
+            // Sending is an explicit request to see what comes back, so it
+            // re-arms following even if the user had scrolled away.
+            stick.followNow();
+            return thread.send(content);
+          }}
           onStop={thread.stop}
-          onSteer={thread.steer}
+          onSteer={(text) => {
+            stick.followNow();
+            return thread.steer(text);
+          }}
           live={turnLive}
           disabled={!activeConv || thread.status !== "ready"}
         />
@@ -409,6 +493,19 @@ export function App(): JSX.Element {
           />
         )}
       </main>
+
+      {/* One scrim for both drawers; CSS keeps it out of the way above the
+          breakpoint where nothing is off-canvas. */}
+      {(navOpen || inspectorOpen) && (
+        <button
+          className="drawer-scrim"
+          aria-label="Close panel"
+          onClick={() => {
+            setNavOpen(false);
+            setInspectorOpen(false);
+          }}
+        />
+      )}
 
       <Inspector conversationId={activeConv} agentName={headerAgent} />
 

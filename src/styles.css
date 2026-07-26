@@ -1905,3 +1905,287 @@ textarea.approval-args-edit:focus {
 .inline-edit-foot .smallcaps {
   font-size: 10px;
 }
+
+/* ============================================================
+   STICK-TO-BOTTOM — jump affordance
+   ============================================================ */
+
+/* `.composer-wrap` becomes a column so the jump pill can sit directly above
+   the input and stay clear of it as the textarea grows. `.composer` used
+   `margin: 0 auto` for centring, which does nothing in a flex column, so it
+   takes an explicit width instead. */
+.composer-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.composer {
+  width: 100%;
+  max-width: 820px;
+}
+
+.jump-latest {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 5px 9px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  box-shadow: var(--shadow-2);
+  animation: jump-latest-in 0.16s ease-out;
+}
+.jump-latest:hover {
+  color: var(--ink);
+  border-color: var(--ink-4);
+}
+.jump-latest svg {
+  flex: none;
+}
+
+@keyframes jump-latest-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The thread's own smooth-scroll is driven imperatively via scrollTo, so no
+   `scroll-behavior` here — setting it would also animate the instant pin used
+   during streaming, which is exactly the stutter we avoid. */
+.thread:focus-visible {
+  outline: none;
+}
+.thread-inner {
+  display: flow-root;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jump-latest {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================
+   The shell is a three-column grid (sidebar · thread · inspector) sized for a
+   wide desktop. It collapses in two steps, dropping the least essential pane
+   first, and the dropped panes become off-canvas drawers rather than
+   disappearing — a viewport that can't reach the conversation list is broken,
+   not merely cramped.
+
+     >= 1180px   three panes, as designed
+     900–1179    inspector off-canvas
+     < 900       sidebar off-canvas too; single column
+     < 620       compact type, gutters collapsed, touch affordances
+
+   `.narrow-only` toggles live in the topbar and are hidden above 1180 where
+   nothing is off-canvas. `[data-nav-open]` / `[data-inspector-open]` on `.app`
+   drive the drawers. */
+
+.narrow-only {
+  display: none;
+}
+
+/* dvh tracks the mobile URL bar; vh is the fallback for older engines. */
+.app {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.drawer-scrim {
+  display: none;
+}
+
+/* ---------- two panes: inspector becomes a drawer ---------- */
+@media (max-width: 1179px) {
+  .app,
+  .app.layout-ledger,
+  .app.layout-workshop,
+  .app.canvas-open {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .inspector {
+    position: fixed;
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    width: min(420px, 86vw);
+    z-index: 40;
+    border-left: 1px solid var(--rule-strong);
+    box-shadow: var(--shadow-2);
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    will-change: transform;
+  }
+  .app[data-inspector-open="true"] .inspector {
+    transform: translateX(0);
+  }
+
+  .drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: 56px 0 0;
+    z-index: 30;
+    background: oklch(0.2 0.02 60 / 0.28);
+    border: 0;
+    cursor: default;
+  }
+
+  /* Only the inspector toggle is needed at this width. */
+  .narrow-only[aria-label="Toggle inspector"] {
+    display: inline-grid;
+  }
+}
+
+/* ---------- one pane: sidebar becomes a drawer too ---------- */
+@media (max-width: 899px) {
+  .app,
+  .app.layout-ledger,
+  .app.layout-workshop,
+  .app.canvas-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 84vw);
+    z-index: 40;
+    border-right: 1px solid var(--rule-strong);
+    box-shadow: var(--shadow-2);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    will-change: transform;
+  }
+  .app[data-nav-open="true"] .sidebar {
+    transform: translateX(0);
+  }
+
+  .narrow-only {
+    display: inline-grid;
+  }
+
+  /* The layout switch is a desktop nicety and the widest thing in the topbar;
+     the crumb is redundant once the thread title is right below it. */
+  .layout-switch,
+  .crumb,
+  .topbar-sep {
+    display: none;
+  }
+  .brand-sub {
+    display: none;
+  }
+
+  /* Canvas is a side-by-side idea; at one column it takes the whole pane. */
+  .app.canvas-open .canvas-pane {
+    position: fixed;
+    inset: 56px 0 0;
+    z-index: 45;
+    width: auto;
+  }
+}
+
+/* ---------- compact: phones ---------- */
+@media (max-width: 619px) {
+  /* The 56px index/action gutters cost 112px of a ~360px viewport. Collapse
+     them and let the body span the full width; the index moves inline. */
+  .msg {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 10px 14px;
+    gap: 0;
+  }
+  .msg-num {
+    display: none;
+  }
+  .msg-body {
+    grid-column: 1;
+  }
+  .msg-gutter {
+    grid-column: 1;
+    flex-direction: row;
+    justify-content: flex-end;
+    padding-top: 4px;
+  }
+
+  /* No hover on touch, so row actions must be permanently visible or they are
+     simply unreachable. */
+  .msg-gutter {
+    opacity: 1;
+  }
+
+  .thread-head {
+    padding: 10px 14px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .thread-title {
+    font-size: 17px;
+    flex-basis: 100%;
+    order: -1;
+  }
+
+  .thread {
+    padding: 14px 0 190px;
+  }
+
+  .composer-wrap {
+    padding: 0 12px 12px;
+    padding-top: 28px;
+  }
+  .composer-top {
+    flex-wrap: wrap;
+  }
+  /* Chips are decorative context; the agent one carries the useful bit. */
+  .composer-chip:not(.selected) {
+    display: none;
+  }
+  .composer-foot .smallcaps {
+    display: none;
+  }
+
+  .topbar {
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .brand-title {
+    font-size: 15px;
+  }
+
+  /* Full-bleed drawers read as pages rather than half-open panels. */
+  .sidebar,
+  .inspector {
+    width: min(340px, 92vw);
+  }
+
+  .jump-latest {
+    font-size: 11.5px;
+  }
+}
+
+/* Coarse pointers have no hover at any width, so the same reasoning about
+   permanently-visible row actions applies to tablets. */
+@media (hover: none) {
+  .msg-gutter {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .inspector {
+    transition: none;
+  }
+}
