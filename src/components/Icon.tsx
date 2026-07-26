@@ -35,6 +35,7 @@ export type IconName =
   | "canvasArrow"
   | "bolt"
   | "attach"
+  | "stop"
   | "sliders";
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
@@ -290,6 +291,12 @@ export function Icon({ name, size = 14, ...rest }: IconProps): JSX.Element | nul
       return (
         <svg {...common}>
           <path d="M21 10.5 11.5 20a5 5 0 0 1-7-7l10-10a3 3 0 0 1 4.2 4.2l-9.9 9.9a1 1 0 0 1-1.4-1.4L16 7" />
+        </svg>
+      );
+    case "stop":
+      return (
+        <svg {...common}>
+          <rect x="6" y="6" width="12" height="12" rx="1.5" />
         </svg>
       );
     case "sliders":

@@ -7,6 +7,12 @@ export interface ComposerProps {
   tokensUsed?: number;
   tokenBudget?: number;
   onSend: (content: string) => Promise<void> | void;
+  /** Stop button — ends the turn. Absent means no stop affordance. */
+  onStop?: () => Promise<void> | void;
+  /** Steer the running turn with the draft text, without ending it. */
+  onSteer?: (text: string) => Promise<void> | void;
+  /** True while an assistant turn is in flight. */
+  live?: boolean;
   disabled?: boolean;
 }
 
@@ -22,22 +28,43 @@ export function Composer({
   tokensUsed,
   tokenBudget,
   onSend,
+  onStop,
+  onSteer,
+  live = false,
   disabled = false,
 }: ComposerProps): JSX.Element {
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [stopping, setStopping] = useState(false);
 
-  const canSend = !disabled && !sending && draft.trim().length > 0;
+  const hasDraft = draft.trim().length > 0;
+  // While a turn is live the primary action steers it instead of queueing a new
+  // message — `interject` keeps the turn alive and redirects it, which is the
+  // verb that matches "actually, do it this way instead".
+  const steerFn = live ? onSteer : undefined;
+  const steering = steerFn !== undefined;
+  const canSubmit = !disabled && !busy && hasDraft;
 
   const submit = async () => {
-    if (!canSend) return;
+    if (!canSubmit) return;
     const content = draft;
     setDraft("");
-    setSending(true);
+    setBusy(true);
     try {
-      await onSend(content);
+      if (steerFn) await steerFn(content);
+      else await onSend(content);
     } finally {
-      setSending(false);
+      setBusy(false);
+    }
+  };
+
+  const stop = async () => {
+    if (!onStop || stopping) return;
+    setStopping(true);
+    try {
+      await onStop();
+    } finally {
+      setStopping(false);
     }
   };
 
@@ -48,6 +75,8 @@ export function Composer({
     }
   };
 
+  const submitLabel = steering ? (busy ? "Steering" : "Steer") : busy ? "Sending" : "Send";
+
   return (
     <div className="composer-wrap">
       <div className="composer">
@@ -56,7 +85,8 @@ export function Composer({
             <Icon name="users" size={10} /> {agentName}
           </span>
           <span className="composer-chip">
-            <Icon name="tool" size={10} /> {enabledToolCount} tool{enabledToolCount === 1 ? "" : "s"}
+            <Icon name="tool" size={10} /> {enabledToolCount} tool
+            {enabledToolCount === 1 ? "" : "s"}
           </span>
           <span className="composer-chip">
             <Icon name="attach" size={10} /> context
@@ -73,7 +103,11 @@ export function Composer({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKey}
-          placeholder={`Ask ${agentName}… ( / for commands · @ for agents · # for files )`}
+          placeholder={
+            steering
+              ? `Redirect ${agentName} mid-answer…`
+              : `Ask ${agentName}… ( / for commands · @ for agents · # for files )`
+          }
           disabled={disabled}
         />
         <div className="composer-foot">
@@ -88,10 +122,21 @@ export function Composer({
           </button>
           <div className="spacer" />
           <span className="smallcaps" style={{ color: "var(--ink-4)" }}>
-            shift-return for newline
+            {steering ? "steering keeps the turn alive" : "shift-return for newline"}
           </span>
-          <button className="send-btn" onClick={() => void submit()} disabled={!canSend}>
-            {sending ? "Sending" : "Send"} <kbd>↵</kbd>
+          {live && onStop && (
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={() => void stop()}
+              disabled={stopping}
+              title="Stop the assistant and end the turn"
+            >
+              <Icon name="stop" size={11} />
+              &nbsp;{stopping ? "Stopping…" : "Stop"}
+            </button>
+          )}
+          <button className="send-btn" onClick={() => void submit()} disabled={!canSubmit}>
+            {submitLabel} <kbd>↵</kbd>
           </button>
         </div>
       </div>

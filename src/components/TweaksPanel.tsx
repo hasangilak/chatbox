@@ -1,5 +1,5 @@
 import { Icon } from "./Icon";
-import type { Layout, StatusState, Theme, TweakState } from "../types";
+import type { Layout, Theme, TweakState } from "../types";
 
 export interface TweaksPanelProps {
   state: TweakState;
@@ -12,12 +12,6 @@ const LAYOUTS: Array<[Layout, string]> = [
   ["atelier", "Atelier"],
   ["ledger", "Ledger"],
   ["workshop", "Workshop"],
-];
-const STATUS_STATES: Array<[StatusState, string]> = [
-  ["thinking", "Think"],
-  ["pondering", "Ponder"],
-  ["tool", "Tool"],
-  ["approval", "Wait"],
 ];
 
 export function TweaksPanel({ state, set, onClose }: TweaksPanelProps): JSX.Element {
@@ -59,23 +53,6 @@ export function TweaksPanel({ state, set, onClose }: TweaksPanelProps): JSX.Elem
                 className={state.layout === k ? "active" : ""}
                 style={{ flex: 1 }}
                 onClick={() => set({ layout: k })}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="field">
-          <div className="field-label">
-            <span>Status chip</span>
-          </div>
-          <div className="layout-switch" style={{ width: "100%" }}>
-            {STATUS_STATES.map(([k, n]) => (
-              <button
-                key={k}
-                className={state.status === k ? "active" : ""}
-                style={{ flex: 1 }}
-                onClick={() => set({ status: k })}
               >
                 {n}
               </button>

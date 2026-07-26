@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
 import { Composer } from "./components/Composer";
-import { Message, StatusLine } from "./components/message";
+import { Message } from "./components/message";
 import { Inspector } from "./components/inspector";
 import { TreeView } from "./components/TreeView";
 import { AgentGallery, AgentBuilder } from "./components/agents";
@@ -10,12 +10,9 @@ import { CanvasPane } from "./components/CanvasPane";
 import { TweaksPanel } from "./components/TweaksPanel";
 import { SearchPalette } from "./components/SearchPalette";
 import { useThread } from "./state/useThread";
+import { promptsForNode } from "./state/threadReducer";
 import { useAgents, useConversations, useTags } from "./state/useWorkspace";
-import {
-  createConversation,
-  exportUrl,
-  shareConversation,
-} from "./api/conversations";
+import { createConversation, exportUrl, shareConversation } from "./api/conversations";
 import { editNode, regenerateNode } from "./api/nodes";
 import { YAP_BASE_URL } from "./env";
 import type { Agent, MessageNode, TweakState } from "./types";
@@ -24,22 +21,45 @@ import type { AgentFull } from "./api/wire";
 const DEFAULT_TWEAKS: TweakState = {
   theme: "light",
   layout: "atelier",
-  status: "thinking",
   grain: true,
   reasonOpen: false,
   canvas: false,
   margins: true,
 };
 
+/**
+ * The messages actually rendered: the chain up from `activeLeaf`, plus any turn
+ * still in flight below it.
+ *
+ * The downward half is not optional. `active_leaf.changed` fires when a turn
+ * *finalizes*, so for the whole life of a turn the active leaf is still the user
+ * node and the assistant node hangs off it unreferenced — walking up alone hides
+ * every streaming reply, and with it any prompt parked on that node.
+ *
+ * Only live children are followed, never merely-newer ones, so a completed
+ * sibling branch stays hidden where it belongs.
+ */
 function computeLinearThread(
   activeLeaf: string,
   nodes: Record<string, MessageNode>,
+  isLive: (node: MessageNode) => boolean,
 ): MessageNode[] {
   const chain: MessageNode[] = [];
   let cur: MessageNode | undefined = nodes[activeLeaf];
   while (cur) {
     chain.unshift(cur);
     cur = cur.parent ? nodes[cur.parent] : undefined;
+  }
+
+  const all = Object.values(nodes);
+  let tail = chain[chain.length - 1];
+  while (tail) {
+    const live: MessageNode | undefined = all
+      .filter((n) => n.parent === tail?.id && isLive(n))
+      .pop();
+    if (!live) break;
+    chain.push(live);
+    tail = live;
   }
   return chain;
 }
@@ -93,10 +113,34 @@ export function App(): JSX.Element {
 
   const thread = useThread(activeConv);
 
+  const pausedNodeIds = useMemo(
+    () =>
+      new Set(
+        Object.values(thread.state.prompts)
+          .filter((p) => p.response === null)
+          .map((p) => p.node_id),
+      ),
+    [thread.state.prompts],
+  );
+
+  // `streaming` stays true across a pause, so this covers a turn parked on a
+  // prompt as well as one mid-sentence — the user must be able to stop either,
+  // otherwise someone who doesn't want to decide has no way out.
+  const isLive = useCallback(
+    (n: MessageNode) => n.streaming === true && !thread.state.cancelled[n.id],
+    [thread.state.cancelled],
+  );
+
   const linearThread = useMemo(() => {
     if (!thread.state.tree.activeLeaf) return [] as MessageNode[];
-    return computeLinearThread(thread.state.tree.activeLeaf, thread.state.tree.nodes);
-  }, [thread.state.tree]);
+    return computeLinearThread(
+      thread.state.tree.activeLeaf,
+      thread.state.tree.nodes,
+      isLive,
+    );
+  }, [thread.state.tree, isLive]);
+
+  const turnLive = useMemo(() => linearThread.some(isLive), [linearThread, isLive]);
 
   const agentList = ["all", ...(tags.data?.map((t) => t.name) ?? [])];
 
@@ -124,9 +168,7 @@ export function App(): JSX.Element {
     if (!activeConv) return;
     try {
       const res = await shareConversation(activeConv);
-      await navigator.clipboard
-        .writeText(res.public_url)
-        .catch(() => undefined);
+      await navigator.clipboard.writeText(res.public_url).catch(() => undefined);
       setShareMsg(`Share URL copied: ${res.public_url}`);
       setTimeout(() => setShareMsg(null), 4000);
     } catch (err) {
@@ -149,6 +191,11 @@ export function App(): JSX.Element {
   const headerTitle = thread.conversation?.title ?? activeConvMeta?.title ?? "";
   const headerAgent = thread.conversation?.agent ?? activeConvMeta?.agent ?? "Assistant";
   const enabledToolCount = 4;
+  const threadError = thread.state.lastError;
+  const lastAsstNode = useMemo(
+    () => [...linearThread].reverse().find((n) => n.role === "asst") ?? null,
+    [linearThread],
+  );
 
   return (
     <div
@@ -197,18 +244,10 @@ export function App(): JSX.Element {
           >
             <Icon name="canvas" size={14} />
           </button>
-          <button
-            className="icon-btn"
-            onClick={() => setShowAgents(true)}
-            title="Agents"
-          >
+          <button className="icon-btn" onClick={() => setShowAgents(true)} title="Agents">
             <Icon name="users" size={14} />
           </button>
-          <button
-            className="icon-btn"
-            onClick={() => setShowTree(true)}
-            title="Message tree"
-          >
+          <button className="icon-btn" onClick={() => setShowTree(true)} title="Message tree">
             <Icon name="tree" size={14} />
           </button>
           <button
@@ -218,11 +257,7 @@ export function App(): JSX.Element {
           >
             <Icon name={tweaks.theme === "light" ? "moon" : "sun"} size={14} />
           </button>
-          <button
-            className="icon-btn"
-            onClick={() => setShowTweaks((s) => !s)}
-            title="Tweaks"
-          >
+          <button className="icon-btn" onClick={() => setShowTweaks((s) => !s)} title="Tweaks">
             <Icon name="sliders" size={14} />
           </button>
           <div
@@ -318,10 +353,7 @@ export function App(): JSX.Element {
             </div>
           )}
           {thread.status === "error" && (
-            <div
-              className="ornament"
-              style={{ color: "var(--crimson)", flexDirection: "column" }}
-            >
+            <div className="ornament" style={{ color: "var(--crimson)", flexDirection: "column" }}>
               {thread.error}
             </div>
           )}
@@ -331,6 +363,10 @@ export function App(): JSX.Element {
               key={n.id}
               node={n}
               index={i + 1}
+              prompts={promptsForNode(thread.state, n.id)}
+              interjections={thread.state.interjections[n.id]}
+              cancellation={thread.state.cancelled[n.id]}
+              onRespond={thread.respond}
               onEdit={
                 n.role === "user"
                   ? (draft, opts) => onEditNode(n.id, draft, opts.ripple)
@@ -340,13 +376,15 @@ export function App(): JSX.Element {
             />
           ))}
 
-          {linearThread.some((n) => n.streaming) && (
-            <div className="msg">
-              <div className="msg-num" />
-              <div className="msg-body">
-                <StatusLine state={tweaks.status} tool="run_tests" elapsed="…" />
-              </div>
-              <div className="msg-gutter" />
+          {threadError && (
+            <div className={`turn-error ${threadError.recoverable ? "" : "fatal"}`}>
+              <Icon name="bolt" size={12} />
+              <span>{threadError.message}</span>
+              {threadError.interruptedByRestart && lastAsstNode && (
+                <button className="btn btn-sm" onClick={() => void onRegenerate(lastAsstNode.id)}>
+                  Regenerate
+                </button>
+              )}
             </div>
           )}
 
@@ -357,6 +395,9 @@ export function App(): JSX.Element {
           agentName={headerAgent}
           enabledToolCount={enabledToolCount}
           onSend={(content) => thread.send(content)}
+          onStop={thread.stop}
+          onSteer={thread.steer}
+          live={turnLive}
           disabled={!activeConv || thread.status !== "ready"}
         />
 
@@ -372,7 +413,11 @@ export function App(): JSX.Element {
       <Inspector conversationId={activeConv} agentName={headerAgent} />
 
       {showTree && activeConv && (
-        <TreeView tree={thread.state.tree} onClose={() => setShowTree(false)} />
+        <TreeView
+          tree={thread.state.tree}
+          pausedNodeIds={pausedNodeIds}
+          onClose={() => setShowTree(false)}
+        />
       )}
       {showAgents && builderAgent === undefined && (
         <AgentGallery
