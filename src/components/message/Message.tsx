@@ -2,14 +2,21 @@ import { useState } from "react";
 import { Icon } from "../Icon";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { ToolCall } from "./ToolCall";
-import { ApprovalCard } from "./ApprovalCard";
-import { Clarify } from "./Clarify";
+import { PromptCard } from "./PromptCard";
 import { StatusLine } from "./StatusLine";
-import type { MessageNode } from "../../types";
+import type { Cancellation, Interjection, MessageNode, Prompt } from "../../types";
+import type { RespondToPromptBody } from "../../api/wire";
 
 export interface MessageProps {
   node: MessageNode;
   index: number;
+  /** Every prompt this node raised, oldest first — open ones render live. */
+  prompts?: Prompt[];
+  /** Mid-turn steering that landed on this node. */
+  interjections?: Interjection[];
+  /** Set when the user stopped this turn; it reads as "stopped", not "complete". */
+  cancellation?: Cancellation;
+  onRespond?: (promptId: string, body: RespondToPromptBody) => Promise<void>;
   onEdit?: (draft: string, opts: { ripple: boolean }) => Promise<void> | void;
   onBranch?: () => void;
 }
@@ -26,13 +33,27 @@ const MARGIN_NOTES: Record<number, string> = {
   5: "Wrote 3 files; 1.1s. Offers to run tests next.",
 };
 
-export function Message({ node, index, onEdit, onBranch }: MessageProps): JSX.Element {
+export function Message({
+  node,
+  index,
+  prompts = [],
+  interjections = [],
+  cancellation,
+  onRespond,
+  onEdit,
+  onBranch,
+}: MessageProps): JSX.Element {
   const [editing, setEditing] = useState<boolean>(false);
   const [draft, setDraft] = useState<string>(node.content);
   const [ripple, setRipple] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const isUser = node.role === "user";
   const numLabel = String(index).padStart(2, "0");
+  // A prompt left open on a turn that is no longer running can never be
+  // resumed, so the card stops asking. Derived from the node rather than from
+  // `turn.cancelled` alone, because that event is stream-only and a reload
+  // must reach the same conclusion.
+  const promptsAreMoot = cancellation !== undefined || node.streaming !== true;
 
   const save = async () => {
     if (!onEdit) {
@@ -72,11 +93,7 @@ export function Message({ node, index, onEdit, onBranch }: MessageProps): JSX.El
               <Icon name="branch" size={11} />
               &nbsp;{saving ? "Saving…" : "Save & branch"}
             </button>
-            <button
-              className="btn btn-ghost"
-              onClick={() => setEditing(false)}
-              disabled={saving}
-            >
+            <button className="btn btn-ghost" onClick={() => setEditing(false)} disabled={saving}>
               Cancel
             </button>
             <label
@@ -135,10 +152,41 @@ export function Message({ node, index, onEdit, onBranch }: MessageProps): JSX.El
           ))}
         </div>
 
+        {interjections.map((i) => (
+          <div key={i.id} className="interjection">
+            <Icon name="wand" size={11} />
+            <span className="interjection-label">
+              You steered{i.aborted ? " mid-sentence" : " — queued for the next round"}
+            </span>
+            <span className="interjection-text">“{i.text}”</span>
+          </div>
+        ))}
+
         {node.toolCall && <ToolCall tool={node.toolCall} />}
-        {node.clarify && <Clarify data={node.clarify} />}
-        {node.approval && <ApprovalCard approval={node.approval} />}
-        {node.streaming && <StatusLine state="streaming" elapsed="2.1s" />}
+
+        {onRespond &&
+          prompts.map((p) => (
+            <PromptCard
+              key={p.id}
+              prompt={p}
+              moot={promptsAreMoot}
+              onRespond={onRespond}
+            />
+          ))}
+
+        {cancellation && (
+          <div className="turn-stopped">
+            <Icon name="x" size={11} />
+            <span>
+              Stopped
+              {cancellation.aborted ? " — the reply ends mid-sentence" : ""}
+            </span>
+          </div>
+        )}
+
+        {node.streaming && !cancellation && (
+          <StatusLine state={node.status ?? "streaming"} tool={node.toolCall?.name} />
+        )}
       </div>
       <div className="msg-gutter">
         <button

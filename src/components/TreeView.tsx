@@ -6,6 +6,12 @@ import type { MessageNode, MessageTree } from "../types";
 
 export interface TreeViewProps {
   tree: MessageTree;
+  /**
+   * Ids of nodes parked on a prompt. Not read off the nodes themselves because
+   * `node.approval` is never written by the runtime — the prompt store is the
+   * only place that knows.
+   */
+  pausedNodeIds?: ReadonlySet<string>;
   onClose: () => void;
 }
 
@@ -61,7 +67,7 @@ function firstNodeId(tree: MessageTree): string {
   return tree.activeLeaf || tree.rootId || Object.keys(tree.nodes)[0] || "";
 }
 
-export function TreeView({ tree, onClose }: TreeViewProps): JSX.Element {
+export function TreeView({ tree, pausedNodeIds, onClose }: TreeViewProps): JSX.Element {
   const [activeId, setActiveId] = useState<string>(() => firstNodeId(tree));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [ripple, setRipple] = useState<boolean>(true);
@@ -78,8 +84,7 @@ export function TreeView({ tree, onClose }: TreeViewProps): JSX.Element {
     try {
       if (kind === "branch") await branchNode(nodeId);
       if (kind === "regenerate") await regenerateNode(nodeId);
-      if (kind === "prune")
-        await pruneNode(nodeId, { fallbackLeaf: tree.activeLeaf || undefined });
+      if (kind === "prune") await pruneNode(nodeId, { fallbackLeaf: tree.activeLeaf || undefined });
     } catch (err) {
       console.error(`${kind} failed`, err);
     } finally {
@@ -279,7 +284,7 @@ export function TreeView({ tree, onClose }: TreeViewProps): JSX.Element {
                         → {n.toolCall.name}
                       </div>
                     )}
-                    {n.approval && (
+                    {pausedNodeIds?.has(n.id) && (
                       <div
                         style={{
                           marginTop: 2,
@@ -288,7 +293,7 @@ export function TreeView({ tree, onClose }: TreeViewProps): JSX.Element {
                           color: "var(--ochre-ink)",
                         }}
                       >
-                        ⚡ approval
+                        ⚡ awaiting you
                       </div>
                     )}
                   </div>

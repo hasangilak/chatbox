@@ -26,11 +26,12 @@ export function ToolCall({ tool }: ToolCallProps): JSX.Element {
         <span className="tool-icon">
           <Icon name="tool" size={11} />
         </span>
-        <span className="tool-name">{tool.name}(</span>
-        <span className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-          {argPairs}
-        </span>
-        <span className="tool-name">)</span>
+        <span className="tool-name">{tool.name}</span>
+        {argPairs && (
+          <span className="mono tool-args" title={argPairs}>
+            {argPairs}
+          </span>
+        )}
         <span className={`tool-status ${tool.status}`}>
           <span className="dot" />
           {statusLabel(tool.status, tool.elapsed)}
