@@ -38,23 +38,36 @@ Fonts (Fraunces, IBM Plex Sans, JetBrains Mono) are pulled from Google Fonts via
 
 ## Connecting to the yap server
 
-This client talks to the [yap server](https://github.com/hasangilak/simplest-llm) (local path: `/Users/hassangilak/Work/simplest-llm`). Copy `.env.example` to `.env` and set:
+This client talks to the [yap server](https://github.com/hasangilak/yap). Clone it wherever you like; the steps below assume `$YAP` points at that checkout:
+
+```bash
+export YAP=~/Work/yap          # adjust to your own path
+```
+
+Configure this repo — `cp .env.example .env`, then set:
 
 ```
 VITE_YAP_BASE_URL=http://localhost:3001/api/v1
-VITE_YAP_TOKEN=            # optional, only if server was started with YAP_API_TOKEN
+VITE_YAP_TOKEN=            # optional, only if yap was started with YAP_API_TOKEN
 ```
 
-In one terminal, bring yap up:
+Bring yap up in its own terminal. `pnpm dev` runs in the foreground and never exits, so it has to be the last command:
 
 ```bash
-cd /Users/hassangilak/Work/simplest-llm
+cd "$YAP"
+cp .env.example .env                 # Prisma reads DATABASE_URL from here; it has no fallback
 docker compose up -d postgres
-pnpm install && pnpm db:push && pnpm dev     # yap on :3001
-curl -sX POST http://localhost:3001/api/v1/dev/seed   # load sample data
+ollama pull qwen2.5:14b              # or a lighter model — see yap's README
+pnpm install && pnpm db:push
+pnpm dev                             # yap on :3001, leave running
 ```
 
-Then `npm run dev` in this repo — the sidebar will populate from the server.
+Then, in a second terminal, seed sample data and start the client:
+
+```bash
+curl -sX POST http://localhost:3001/api/v1/dev/seed
+npm run dev                          # from this repo — the sidebar populates from the server
+```
 
 ### What is wired
 
