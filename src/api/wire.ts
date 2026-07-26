@@ -96,7 +96,7 @@ export interface EvalResult {
 
 /* ---------- Approvals ---------- */
 
-export type ApprovalDecision = "allow" | "always" | "deny";
+export type { ApprovalDecision } from "../types";
 
 export interface Grant {
   key: string;

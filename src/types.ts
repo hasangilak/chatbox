@@ -50,12 +50,21 @@ export interface ClarifyData {
   input: string;
 }
 
+export type ApprovalDecision = "allow" | "always" | "deny";
+
 export interface ApprovalData {
   id?: string;
   tool: string;
   title: string;
   body: string;
   preview?: string;
+  /**
+   * Set once the server confirms a decision — either by an `approval.decided`
+   * event or by a `409 already decided` response. The server does not persist
+   * this on the node row, so the event stream is the only source of truth and a
+   * tree-only load will never populate it.
+   */
+  decision?: ApprovalDecision;
 }
 
 export interface MessageNode {

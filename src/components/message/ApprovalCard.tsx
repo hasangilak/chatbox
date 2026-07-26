@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { Icon } from "../Icon";
 import { decideApproval } from "../../api/approvals";
-import type { ApprovalData } from "../../types";
-
-type Decision = "allow" | "always" | "deny";
+import type { ApprovalData, ApprovalDecision as Decision } from "../../types";
 
 export interface ApprovalCardProps {
   approval: ApprovalData;
@@ -11,20 +9,26 @@ export interface ApprovalCardProps {
 }
 
 export function ApprovalCard({ approval, onDecision }: ApprovalCardProps): JSX.Element {
-  const [decision, setDecision] = useState<Decision | null>(null);
+  // `confirmed` only covers the window between the HTTP response and the
+  // `approval.decided` event, which have no ordering guarantee between them.
+  // `approval.decision` is the durable answer: the reducer sets it from the
+  // event, so it survives a reload, a reconnect, or a decision made elsewhere.
+  const [confirmed, setConfirmed] = useState<Decision | null>(null);
   const [submitting, setSubmitting] = useState<Decision | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const decision = approval.decision ?? confirmed;
 
   const decide = async (d: Decision) => {
     if (submitting || decision) return;
     setSubmitting(d);
     setError(null);
     try {
-      if (approval.id) {
-        await decideApproval(approval.id, d);
-      }
-      setDecision(d);
-      onDecision?.(d);
+      // The server's answer wins over the button that was clicked — a `409`
+      // means someone (or another tab) already settled this differently.
+      const settled = approval.id ? (await decideApproval(approval.id, d)).decision : d;
+      setConfirmed(settled);
+      onDecision?.(settled);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

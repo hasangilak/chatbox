@@ -150,8 +150,21 @@ export function applyEvent(state: ThreadState, ev: BusEvent): ThreadState {
         }),
       };
 
-    case "approval.decided":
-      return { ...state, ...withEventId };
+    case "approval.decided": {
+      const current = state.tree.nodes[ev.node_id];
+      if (!current?.approval) return { ...state, ...withEventId };
+      // A pause is a durable checkpoint, so a decision can arrive long after
+      // the click — from another tab, or on replay after a reconnect.
+      // Patching it onto the node is what lets the card rebuild as decided
+      // instead of showing live buttons over an already-settled approval.
+      return {
+        ...state,
+        ...withEventId,
+        tree: patchNode(state.tree, ev.node_id, {
+          approval: { ...current.approval, decision: ev.decision },
+        }),
+      };
+    }
 
     case "clarify.requested":
       return {
