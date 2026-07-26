@@ -267,7 +267,7 @@ export function App(): JSX.Element {
             aria-label="Toggle inspector"
             aria-expanded={inspectorOpen}
           >
-            <Icon name="book" size={14} />
+            <Icon name="clock" size={14} />
           </button>
           <div className="layout-switch" title="Layout">
             <button

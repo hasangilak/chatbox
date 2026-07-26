@@ -2006,6 +2006,26 @@ textarea.approval-args-edit:focus {
   display: none;
 }
 
+/* The topbar is a single 56px row, so anything that wraps inside it overflows
+   rather than reflowing. Keep its parts on one line and let the crumb be the
+   thing that truncates. */
+.brand {
+  flex: none;
+  white-space: nowrap;
+}
+.crumb {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.crumb .current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar-right {
+  flex: none;
+}
+
 /* ---------- two panes: inspector becomes a drawer ---------- */
 @media (max-width: 1179px) {
   .app,
@@ -2046,6 +2066,16 @@ textarea.approval-args-edit:focus {
   .narrow-only[aria-label="Toggle inspector"] {
     display: inline-grid;
   }
+
+  /* Losing a pane means the topbar has less room, not more: the toggle is new
+     and the layout switch still costs ~250px. The tagline and breadcrumb are
+     the most redundant things there — the thread title repeats the crumb
+     directly below it. */
+  .brand-sub,
+  .crumb,
+  .topbar-sep {
+    display: none;
+  }
 }
 
 /* ---------- one pane: sidebar becomes a drawer too ---------- */
@@ -2078,14 +2108,9 @@ textarea.approval-args-edit:focus {
     display: inline-grid;
   }
 
-  /* The layout switch is a desktop nicety and the widest thing in the topbar;
-     the crumb is redundant once the thread title is right below it. */
-  .layout-switch,
-  .crumb,
-  .topbar-sep {
-    display: none;
-  }
-  .brand-sub {
+  /* The layout switch is a desktop nicety and the widest thing left in the
+     topbar. (Tagline and crumb already went at the 1179 step.) */
+  .layout-switch {
     display: none;
   }
 
