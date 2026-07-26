@@ -11,3 +11,7 @@ coverage
 *.tsbuildinfo
 .claude/
 .playwright-mcp/
+
+# Playwright
+test-results/
+playwright-report/
