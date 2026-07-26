@@ -51,8 +51,10 @@ Commit gradually: one small, logical commit per coherent unit of work, conventio
 
 ## Known stubs
 
-Real backend data has largely replaced the mocks, but some placeholders remain and should be wired rather than imitated: `MARGIN_NOTES` in `message/Message.tsx`, `enabledToolCount = 4` and the hardcoded `tool="run_tests"` status line in `App.tsx`. `src/data/sample.ts` is dead — nothing imports it.
+Real backend data has largely replaced the mocks, but some placeholders remain and should be wired rather than imitated: `MARGIN_NOTES` and the hardcoded "2 branches" chip in `message/Message.tsx`, `enabledToolCount = 4` in `App.tsx`. `src/data/sample.ts` is dead — nothing imports it.
 
 ## Reference
 
-`docs/server-spec.md` (~800 lines) is the authoritative contract: data model, every HTTP endpoint, and the event protocol, derived from this client. Read it before changing anything in `src/api/` or adding a feature that needs server support.
+`docs/chat-box-integration.md` is the current contract, written from the server side: every endpoint, event, and wire shape, plus the migration notes for breaking changes. Read it before changing anything in `src/api/` or adding a feature that needs server support. `docs/data-flows.md` covers the orderings that carry invariants (reconnect, persist-then-publish, the prompt pause) and `docs/user-stories.md` maps features to the endpoints that deliver them.
+
+`docs/server-spec.md` (~800 lines) predates the durable-prompt collapse and still describes the removed `approval.*` / `clarify.*` events and their endpoints. Treat it as history where the two disagree.
