@@ -12,6 +12,7 @@ export interface TreeViewProps {
    * only place that knows.
    */
   pausedNodeIds?: ReadonlySet<string>;
+  onChanged: () => Promise<void> | void;
   onClose: () => void;
 }
 
@@ -67,7 +68,12 @@ function firstNodeId(tree: MessageTree): string {
   return tree.activeLeaf || tree.rootId || Object.keys(tree.nodes)[0] || "";
 }
 
-export function TreeView({ tree, pausedNodeIds, onClose }: TreeViewProps): JSX.Element {
+export function TreeView({
+  tree,
+  pausedNodeIds,
+  onChanged,
+  onClose,
+}: TreeViewProps): JSX.Element {
   const [activeId, setActiveId] = useState<string>(() => firstNodeId(tree));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [ripple, setRipple] = useState<boolean>(true);
@@ -82,9 +88,16 @@ export function TreeView({ tree, pausedNodeIds, onClose }: TreeViewProps): JSX.E
     if (busy) return;
     setBusy(kind);
     try {
-      if (kind === "branch") await branchNode(nodeId);
+      if (kind === "branch") {
+        await branchNode(nodeId);
+        await onChanged();
+        onClose();
+      }
       if (kind === "regenerate") await regenerateNode(nodeId);
-      if (kind === "prune") await pruneNode(nodeId, { fallbackLeaf: tree.activeLeaf || undefined });
+      if (kind === "prune") {
+        await pruneNode(nodeId);
+        await onChanged();
+      }
     } catch (err) {
       console.error(`${kind} failed`, err);
     } finally {
@@ -516,7 +529,12 @@ export function TreeView({ tree, pausedNodeIds, onClose }: TreeViewProps): JSX.E
                     alignItems: "center",
                   }}
                   onClick={() => void runAction("branch", active.id)}
-                  disabled={busy !== null}
+                  disabled={busy !== null || active.role !== "asst"}
+                  title={
+                    active.role === "asst"
+                      ? "Use this answer as the parent of a new branch"
+                      : "New branches start after an assistant message"
+                  }
                 >
                   <Icon name="branch" size={12} />{" "}
                   {busy === "branch" ? "Branching…" : "Branch from this node"}

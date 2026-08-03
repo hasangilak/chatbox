@@ -20,8 +20,13 @@ export function regenerateNode(id: string): Promise<MessageNode> {
 export function pruneNode(
   id: string,
   opts: { fallbackLeaf?: string } = {},
-): Promise<{ ok: boolean; removed: number }> {
-  return api.delete<{ ok: boolean; removed: number }>(`/nodes/${id}`, {
+): Promise<{
+  ok: boolean;
+  removed: number;
+  active_leaf_id: string | null;
+  root_node_id: string | null;
+}> {
+  return api.delete(`/nodes/${id}`, {
     query: { subtree: "true", fallback_leaf: opts.fallbackLeaf },
   });
 }

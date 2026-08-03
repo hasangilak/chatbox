@@ -524,6 +524,9 @@ export function App(): JSX.Element {
         <TreeView
           tree={thread.state.tree}
           pausedNodeIds={pausedNodeIds}
+          onChanged={async () => {
+            await Promise.all([thread.reload(), conversations.reload()]);
+          }}
           onClose={() => setShowTree(false)}
         />
       )}
