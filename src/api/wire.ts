@@ -254,6 +254,7 @@ export type SearchScope = "all" | "conversations" | "messages" | "agents";
 export interface SearchHit {
   scope: Exclude<SearchScope, "all">;
   id: string;
+  conversation_id: string | null;
   title: string;
   snippet: string;
   highlight: string;

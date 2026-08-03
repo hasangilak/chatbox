@@ -17,6 +17,22 @@ function debounce<T extends (...args: string[]) => void>(fn: T, wait: number): T
   }) as T;
 }
 
+function Highlight({ text }: { text: string }): JSX.Element {
+  return (
+    <>
+      {text.split(/(\*\*.*?\*\*)/g).map((part, index) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={index} style={{ background: "var(--marker)" }}>
+            {part.slice(2, -2)}
+          </strong>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 export function SearchPalette({
   initialQuery = "",
   onClose,
@@ -89,13 +105,12 @@ export function SearchPalette({
             <div
               key={`${h.scope}:${h.id}`}
               onClick={() => {
-                if (h.scope === "conversations") onOpenConversation(h.id);
-                if (h.scope === "messages") onOpenConversation(h.id.split(":")[0] ?? h.id);
+                if (h.conversation_id) onOpenConversation(h.conversation_id);
               }}
               style={{
                 padding: "10px 12px",
                 borderBottom: "1px solid var(--rule)",
-                cursor: "pointer",
+                cursor: h.conversation_id ? "pointer" : "default",
               }}
             >
               <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
@@ -106,15 +121,9 @@ export function SearchPalette({
                   {h.title}
                 </span>
               </div>
-              <div
-                style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}
-                dangerouslySetInnerHTML={{
-                  __html: h.highlight.replace(
-                    /\*\*(.+?)\*\*/g,
-                    '<strong style="background: var(--marker);">$1</strong>',
-                  ),
-                }}
-              />
+              <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}>
+                <Highlight text={h.highlight} />
+              </div>
             </div>
           ))}
         </div>
