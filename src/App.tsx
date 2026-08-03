@@ -13,9 +13,8 @@ import { useThread } from "./state/useThread";
 import { useStickToBottom } from "./state/useStickToBottom";
 import { promptsForNode } from "./state/threadReducer";
 import { useAgents, useConversations, useTags } from "./state/useWorkspace";
-import { createConversation, exportUrl, shareConversation } from "./api/conversations";
+import { createConversation, downloadExport, shareConversation } from "./api/conversations";
 import { editNode, regenerateNode } from "./api/nodes";
-import { YAP_BASE_URL } from "./env";
 import type { Agent, MessageNode, TweakState } from "./types";
 import type { AgentFull } from "./api/wire";
 
@@ -206,10 +205,22 @@ export function App(): JSX.Element {
     }
   };
 
-  const onExport = (format: "md" | "json") => {
+  const onExport = async (format: "md" | "json") => {
     if (!activeConv) return;
-    const path = exportUrl(activeConv, format);
-    window.open(YAP_BASE_URL + path, "_blank", "noopener");
+    try {
+      const blob = await downloadExport(activeConv, format);
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `${activeConv}.${format}`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 0);
+    } catch (err) {
+      setShareMsg(err instanceof Error ? err.message : String(err));
+      setTimeout(() => setShareMsg(null), 4000);
+    }
   };
 
   const activeConvMeta = useMemo(() => {

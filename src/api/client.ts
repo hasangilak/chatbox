@@ -93,6 +93,25 @@ async function request<T>(
   return parsed as T;
 }
 
+async function download(path: string): Promise<Blob> {
+  const res = await fetch(buildUrl(path, undefined), {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    const parsed: unknown = text ? safeJson(text) : undefined;
+    throw new ApiError({
+      status: res.status,
+      message:
+        (typeof parsed === "object" && parsed && "error" in parsed
+          ? String((parsed as { error: unknown }).error)
+          : null) || `GET ${path} failed with ${res.status}`,
+      body: parsed,
+    });
+  }
+  return res.blob();
+}
+
 function safeJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -116,6 +135,9 @@ export const api = {
   },
   delete<T>(path: string, opts?: RequestOptions): Promise<T> {
     return request<T>("DELETE", path, opts);
+  },
+  download(path: string): Promise<Blob> {
+    return download(path);
   },
 };
 

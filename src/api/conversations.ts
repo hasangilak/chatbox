@@ -141,3 +141,10 @@ export function revokeShare(conversationId: string): Promise<void> {
 export function exportUrl(conversationId: string, format: "md" | "json"): string {
   return `/conversations/${conversationId}/export?format=${format}`;
 }
+
+export function downloadExport(
+  conversationId: string,
+  format: "md" | "json",
+): Promise<Blob> {
+  return api.download(exportUrl(conversationId, format));
+}
