@@ -14,6 +14,7 @@ export interface Conversation {
   snippet: string;
   agent: string;
   tag: string;
+  tags?: Array<{ id: string; name: string; color: string | null }>;
   pinned?: boolean;
   updated: string;
   folder: string;

@@ -33,7 +33,10 @@ export function Sidebar({
   onSearch,
 }: SidebarProps): JSX.Element {
   const visible = conversations.filter(
-    (c) => activeTag === "all" || c.tag === activeTag,
+    (c) =>
+      activeTag === "all" ||
+      c.tag === activeTag ||
+      c.tags?.some((tag) => tag.name === activeTag),
   );
 
   return (
