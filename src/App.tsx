@@ -519,7 +519,19 @@ export function App(): JSX.Element {
         />
       )}
 
-      <Inspector conversationId={activeConv} agentName={headerAgent} />
+      <Inspector
+        conversationId={activeConv}
+        agentName={headerAgent}
+        availableTags={tags.data ?? []}
+        attachedTags={thread.conversation?.tags ?? activeConvMeta?.tags ?? []}
+        onTagsChanged={async () => {
+          await Promise.all([
+            thread.reload(),
+            conversations.reload(),
+            tags.reload(),
+          ]);
+        }}
+      />
 
       {showTree && activeConv && (
         <TreeView
