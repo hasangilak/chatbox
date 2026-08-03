@@ -58,7 +58,7 @@ async function userScrollsUp(page: Page): Promise<void> {
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 800 });
-  await page.goto("/");
+  await page.goto("/?conversation=c-1");
   // The thread must actually overflow, or none of this means anything.
   await expect(page.locator(".msg").first()).toBeVisible();
   await expect

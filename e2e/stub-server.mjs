@@ -18,6 +18,7 @@ const PORT = Number(process.env.STUB_PORT ?? 4319);
 /** Live SSE writers, keyed by conversation id. */
 const streams = new Map();
 let seq = 0;
+let createdConversationSeq = 0;
 
 const AGENT = { id: "a-1", name: "Reviewer", initial: "R", desc: "", model: "m", tools: 2, temp: 0.5 };
 
@@ -64,18 +65,21 @@ function json(res, body, status = 200) {
 }
 
 function conversationBody(id) {
-  return {
+  const isNew = id.startsWith("c-new-");
+  const conversation = {
     id,
-    title: "Scroll fixture",
+    title: isNew ? "New conversation" : "Scroll fixture",
+    snippet: "",
     agent: AGENT.name,
     tag: "work",
     updated: "11:00",
     folder: "Today",
-    tokens_used: 10,
-    token_budget: 1000,
-    root_node_id: state.rootId,
-    active_leaf_id: state.activeLeaf,
-    tree: { rootId: state.rootId, activeLeaf: state.activeLeaf, nodes: state.nodes },
+  };
+  return {
+    conversation,
+    tree: isNew
+      ? { rootId: "", activeLeaf: "", nodes: {} }
+      : { rootId: state.rootId, activeLeaf: state.activeLeaf, nodes: state.nodes },
   };
 }
 
@@ -153,6 +157,11 @@ const server = createServer((req, res) => {
       { id: "c-1", title: "Scroll fixture", snippet: "…", agent: AGENT.name, tag: "work", updated: "11:00", folder: "Today" },
       { id: "c-2", title: "Second thread", snippet: "…", agent: AGENT.name, tag: "work", updated: "10:00", folder: "Today" },
     ]);
+  }
+
+  if (path === "/conversations" && req.method === "POST") {
+    const id = `c-new-${++createdConversationSeq}`;
+    return json(res, conversationBody(id).conversation, 201);
   }
 
   const convMatch = path.match(/^\/conversations\/([^/]+)$/);

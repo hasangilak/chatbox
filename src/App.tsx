@@ -27,6 +27,37 @@ const DEFAULT_TWEAKS: TweakState = {
   margins: true,
 };
 
+const CONVERSATION_QUERY_PARAM = "conversation";
+
+/**
+ * React's development StrictMode mounts effects twice. Keep the first bare-URL
+ * creation request at module scope so opening `/` still creates exactly one
+ * conversation rather than two.
+ */
+let bareConversationPromise: Promise<string> | null = null;
+
+function conversationIdFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get(CONVERSATION_QUERY_PARAM);
+}
+
+function writeConversationToUrl(id: string, mode: "push" | "replace"): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set(CONVERSATION_QUERY_PARAM, id);
+  window.history[mode === "push" ? "pushState" : "replaceState"]({}, "", url);
+}
+
+function createBareConversation(): Promise<string> {
+  if (!bareConversationPromise) {
+    bareConversationPromise = createConversation({})
+      .then((conversation) => conversation.id)
+      .catch((error: unknown) => {
+        bareConversationPromise = null;
+        throw error;
+      });
+  }
+  return bareConversationPromise;
+}
+
 /**
  * The messages actually rendered: the chain up from `activeLeaf`, plus any turn
  * still in flight below it.
@@ -69,7 +100,7 @@ type BuilderTarget = Agent | AgentFull | null;
 export function App(): JSX.Element {
   const [tweaks, setTweaks] = useState<TweakState>(DEFAULT_TWEAKS);
   const [showTweaks, setShowTweaks] = useState<boolean>(false);
-  const [activeConv, setActiveConv] = useState<string | null>(null);
+  const [activeConv, setActiveConv] = useState<string | null>(() => conversationIdFromUrl());
   const [activeTag, setActiveTag] = useState<string>("all");
   const [showTree, setShowTree] = useState<boolean>(false);
   const [showAgents, setShowAgents] = useState<boolean>(false);
@@ -85,6 +116,7 @@ export function App(): JSX.Element {
   const conversations = useConversations();
   const tags = useTags();
   const agents = useAgents();
+  const reloadConversations = conversations.reload;
 
   const setTweak = (patch: Partial<TweakState>) => setTweaks((s) => ({ ...s, ...patch }));
 
@@ -110,12 +142,39 @@ export function App(): JSX.Element {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Auto-select the first conversation when the list loads.
+  const openConversation = useCallback((id: string, mode: "push" | "replace" = "push") => {
+    setActiveConv(id);
+    if (conversationIdFromUrl() !== id) writeConversationToUrl(id, mode);
+  }, []);
+
+  // A bare workspace is an explicit fresh start. Replace its history entry
+  // with the new id so refresh restores the chat without creating another.
   useEffect(() => {
-    if (activeConv === null && conversations.data && conversations.data.length > 0) {
-      setActiveConv(conversations.data[0].id);
-    }
-  }, [activeConv, conversations.data]);
+    if (conversationIdFromUrl()) return;
+
+    let mounted = true;
+    void createBareConversation()
+      .then(async (id) => {
+        if (!mounted) return;
+        openConversation(id, "replace");
+        await reloadConversations();
+      })
+      .catch((error: unknown) => {
+        if (!mounted) return;
+        console.error("createConversation failed", error);
+        setShareMsg(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [openConversation, reloadConversations]);
+
+  useEffect(() => {
+    const onPopState = () => setActiveConv(conversationIdFromUrl());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const thread = useThread(activeConv);
 
@@ -176,7 +235,7 @@ export function App(): JSX.Element {
     try {
       const created = await createConversation({});
       await conversations.reload();
-      setActiveConv(created.id);
+      openConversation(created.id);
     } catch (err) {
       console.error("createConversation failed", err);
     }
@@ -350,7 +409,7 @@ export function App(): JSX.Element {
         error={conversations.error}
         activeConv={activeConv ?? ""}
         setActiveConv={(id) => {
-          setActiveConv(id);
+          openConversation(id);
           setNavOpen(false);
         }}
         activeTag={activeTag}
@@ -570,7 +629,7 @@ export function App(): JSX.Element {
           initialQuery={searchSeed}
           onClose={() => setSearchOpen(false)}
           onOpenConversation={(id) => {
-            setActiveConv(id);
+            openConversation(id);
             setSearchOpen(false);
           }}
         />

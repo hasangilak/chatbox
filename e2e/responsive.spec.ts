@@ -17,7 +17,7 @@ const NARROW = { width: 760, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
 async function boot(page: Page): Promise<void> {
-  await page.goto("/");
+  await page.goto("/?conversation=c-1");
   await expect(page.locator(".msg").first()).toBeVisible();
 }
 
