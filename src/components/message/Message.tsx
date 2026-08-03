@@ -54,6 +54,11 @@ export function Message({
   // `turn.cancelled` alone, because that event is stream-only and a reload
   // must reach the same conclusion.
   const promptsAreMoot = cancellation !== undefined || node.streaming !== true;
+  const visibleContent =
+    node.toolCall?.name === "web_search" &&
+    (/web_search\s*\(/.test(node.content) || /"name"\s*:\s*"web_search"/.test(node.content))
+      ? ""
+      : node.content;
 
   const save = async () => {
     if (!onEdit) {
@@ -147,7 +152,7 @@ export function Message({
         {node.reasoning && <ReasoningBlock steps={node.reasoning} defaultOpen={index === 2} />}
 
         <div className="msg-content">
-          {node.content.split("\n\n").map((p, i) => (
+          {visibleContent.split("\n\n").map((p, i) => (
             <p key={i} dangerouslySetInnerHTML={{ __html: renderInline(p) }} />
           ))}
         </div>
