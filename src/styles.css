@@ -1565,11 +1565,18 @@ textarea.approval-args-edit:focus {
 .toggle {
   width: 34px;
   height: 18px;
+  padding: 0;
+  border: 0;
+  flex: 0 0 auto;
   background: var(--rule);
   border-radius: 999px;
   position: relative;
   cursor: pointer;
   transition: background 0.15s;
+}
+.toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .toggle::after {
   content: "";

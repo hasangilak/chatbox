@@ -129,6 +129,7 @@ export function AgentBuilder({ agent, onClose }: AgentBuilderProps): JSX.Element
 
   const toggleTool = (id: string) => {
     if (!draft) return;
+    if (!tools.data?.find((tool) => tool.id === id)?.enabled) return;
     const has = draft.tool_ids.includes(id);
     update({
       tool_ids: has ? draft.tool_ids.filter((t) => t !== id) : [...draft.tool_ids, id],
@@ -137,6 +138,11 @@ export function AgentBuilder({ agent, onClose }: AgentBuilderProps): JSX.Element
 
   const save = async () => {
     if (!draft) return;
+    const toolIds = tools.data
+      ? draft.tool_ids.filter(
+          (id) => tools.data?.find((tool) => tool.id === id)?.enabled,
+        )
+      : draft.tool_ids;
     setSaving(true);
     setSaveError(null);
     try {
@@ -151,7 +157,7 @@ export function AgentBuilder({ agent, onClose }: AgentBuilderProps): JSX.Element
           max_tokens: draft.max_tokens,
           system_prompt: draft.system_prompt,
           variables: draft.variables,
-          tool_ids: draft.tool_ids,
+          tool_ids: toolIds,
           permission_default: draft.permission_default,
           message: commitMessage || "initial version",
         });
@@ -167,7 +173,7 @@ export function AgentBuilder({ agent, onClose }: AgentBuilderProps): JSX.Element
           max_tokens: draft.max_tokens,
           system_prompt: draft.system_prompt,
           variables: draft.variables,
-          tool_ids: draft.tool_ids,
+          tool_ids: toolIds,
           permission_default: draft.permission_default,
           message: commitMessage || "updated",
         });
@@ -237,7 +243,9 @@ export function AgentBuilder({ agent, onClose }: AgentBuilderProps): JSX.Element
   };
 
   const toolList = tools.data ?? [];
-  const enabledCount = draft ? draft.tool_ids.length : 0;
+  const enabledCount = draft
+    ? toolList.filter((tool) => tool.enabled && draft.tool_ids.includes(tool.id)).length
+    : 0;
 
   const evalBars = useMemo(() => {
     if (!evalRun) return null;
@@ -668,18 +676,26 @@ export function AgentBuilder({ agent, onClose }: AgentBuilderProps): JSX.Element
                     </span>
                   </div>
                   {toolList.map((t) => {
-                    const on = draft.tool_ids.includes(t.id);
+                    const on = t.enabled && draft.tool_ids.includes(t.id);
                     return (
                       <div key={t.id} className="toggle-row">
                         <div style={{ minWidth: 0 }}>
                           <div className="mono" style={{ fontSize: 12 }}>
                             {t.name}
+                            {!t.enabled && (
+                              <span className="smallcaps" style={{ marginLeft: 6 }}>
+                                unavailable
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{t.desc}</div>
                         </div>
-                        <div
+                        <button
+                          type="button"
                           className={`toggle ${on ? "on" : ""}`}
                           onClick={() => toggleTool(t.id)}
+                          disabled={!t.enabled}
+                          aria-label={`${on ? "Disable" : "Enable"} ${t.name}`}
                         />
                       </div>
                     );

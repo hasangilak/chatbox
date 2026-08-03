@@ -230,7 +230,8 @@ export function App(): JSX.Element {
 
   const headerTitle = thread.conversation?.title ?? activeConvMeta?.title ?? "";
   const headerAgent = thread.conversation?.agent ?? activeConvMeta?.agent ?? "Assistant";
-  const enabledToolCount = 4;
+  const enabledToolCount =
+    agents.data?.find((agent) => agent.name === headerAgent)?.tools ?? 0;
   const threadError = thread.state.lastError;
   const lastAsstNode = useMemo(
     () => [...linearThread].reverse().find((n) => n.role === "asst") ?? null,
