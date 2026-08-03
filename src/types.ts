@@ -105,6 +105,8 @@ export interface Prompt {
    */
   request: PromptRequest | null;
   response: PromptResponse | null;
+  /** True when the owning turn was stopped before this prompt was answered. */
+  cancelled: boolean;
   /** Epoch ms. The pause has no timeout, so cards should show their age. */
   requested_at: number;
 }

@@ -96,6 +96,7 @@ export function promptFromRow(row: PromptRow): Prompt {
     tool: row.tool,
     request: row.request,
     response: row.response,
+    cancelled: row.cancelled_at !== null,
     requested_at: Date.parse(row.created_at),
   };
 }

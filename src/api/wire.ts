@@ -119,6 +119,8 @@ export interface PromptRow {
   request: PromptRequest;
   response: PromptResponse | null;
   responded_at: string | null;
+  /** ISO 8601 when the owning turn was stopped before this was answered. */
+  cancelled_at: string | null;
   /** ISO 8601. Use it to age the card — a pause never expires. */
   created_at: string;
 }

@@ -40,7 +40,7 @@ export function PromptCard({
     // An open prompt always has its request; see the `Prompt.request` note.
     if (request === null) return null;
 
-    if (moot) {
+    if (prompt.cancelled || moot) {
       return (
         <div className="tool">
           <div className="tool-head" style={{ cursor: "default" }}>

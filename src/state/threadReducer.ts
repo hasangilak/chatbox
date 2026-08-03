@@ -77,7 +77,7 @@ export type OpenPrompt = Prompt & { request: PromptRequest };
 /** Open prompts for a node, oldest first. */
 export function openPromptsForNode(state: ThreadState, nodeId: string): OpenPrompt[] {
   return promptsForNode(state, nodeId).filter(
-    (p): p is OpenPrompt => p.response === null && p.request !== null,
+    (p): p is OpenPrompt => !p.cancelled && p.response === null && p.request !== null,
   );
 }
 
@@ -90,7 +90,7 @@ export function promptsForNode(state: ThreadState, nodeId: string): Prompt[] {
 
 /** True while the conversation is parked waiting on a human. */
 export function hasOpenPrompt(state: ThreadState): boolean {
-  return Object.values(state.prompts).some((p) => p.response === null);
+  return Object.values(state.prompts).some((p) => !p.cancelled && p.response === null);
 }
 
 /**
@@ -232,6 +232,7 @@ export function applyEvent(state: ThreadState, ev: BusEvent): ThreadState {
         // A replay can deliver the request after the response. Don't let it
         // reopen a prompt that a later `prompt.responded` already settled.
         response: state.prompts[ev.prompt_id]?.response ?? null,
+        cancelled: state.prompts[ev.prompt_id]?.cancelled ?? false,
         requested_at: ev.at,
       };
       return {
@@ -258,6 +259,7 @@ export function applyEvent(state: ThreadState, ev: BusEvent): ThreadState {
             // with no request still settles the prompt, which is the point.
             request: null,
             response: ev.response,
+            cancelled: false,
             requested_at: ev.at,
           };
       return {
