@@ -21,6 +21,10 @@ test("a bare workspace creates one fresh conversation and makes its URL durable"
   await expect(page.locator(".composer textarea")).toBeEnabled();
   expect(createRequests).toBe(1);
 
+  await page.getByRole("button", { name: "1 tool" }).click();
+  await expect(page.getByText("Web search", { exact: true })).toBeVisible();
+  await expect(page.getByText("Always on", { exact: true })).toBeVisible();
+
   await page.reload();
   await expect(page.locator(".thread-title")).toHaveText("New conversation");
   expect(createRequests).toBe(1);

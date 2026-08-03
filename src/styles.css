@@ -694,10 +694,22 @@ textarea {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  border: 0;
   padding: 8px 12px;
   cursor: pointer;
   background: linear-gradient(180deg, var(--paper-2), var(--paper));
   border-bottom: 1px solid var(--rule);
+  color: inherit;
+  text-align: left;
+}
+.tool.web-search {
+  border-left: 2px solid var(--lapis);
+}
+.tool.web-search .tool-icon {
+  color: var(--lapis);
+  border-color: var(--lapis);
+  background: var(--lapis-wash);
 }
 /* Args are one line that truncates — now that a user can type them, they can be
    any length, and wrapping turns the header into a tall column of fragments.
@@ -1217,6 +1229,101 @@ textarea.approval-args-edit:focus {
   background: var(--ochre-wash);
   border-color: var(--ochre);
   color: var(--ochre-ink);
+}
+.composer-chip.open {
+  border-color: var(--lapis);
+  color: var(--lapis);
+  background: var(--lapis-wash);
+}
+
+.composer-tools {
+  margin: 8px 8px 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--paper-2);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.composer-tools-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.composer-tools-note {
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.composer-tools-list {
+  max-height: 230px;
+  overflow-y: auto;
+}
+.composer-tool-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--rule);
+  opacity: 0.62;
+}
+.composer-tool-row:last-child {
+  border-bottom: 0;
+}
+.composer-tool-row[data-active="true"] {
+  opacity: 1;
+}
+.composer-tool-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-3);
+  background: var(--paper);
+}
+.composer-tool-row[data-active="true"] .composer-tool-icon {
+  color: var(--lapis);
+  border-color: var(--lapis);
+  background: var(--lapis-wash);
+}
+.composer-tool-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.composer-tool-copy strong {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.composer-tool-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.composer-tool-state {
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-3);
+  background: var(--paper);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+.composer-tool-state.always {
+  color: var(--sage);
+  border-color: var(--sage);
+  background: var(--sage-wash);
 }
 
 .composer textarea {

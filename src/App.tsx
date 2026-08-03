@@ -12,7 +12,13 @@ import { SearchPalette } from "./components/SearchPalette";
 import { useThread } from "./state/useThread";
 import { useStickToBottom } from "./state/useStickToBottom";
 import { promptsForNode } from "./state/threadReducer";
-import { useAgents, useConversations, useTags } from "./state/useWorkspace";
+import {
+  useAgentFull,
+  useAgents,
+  useConversations,
+  useTags,
+  useTools,
+} from "./state/useWorkspace";
 import { createConversation, downloadExport, shareConversation } from "./api/conversations";
 import { editNode, regenerateNode } from "./api/nodes";
 import type { Agent, MessageNode, TweakState } from "./types";
@@ -116,6 +122,7 @@ export function App(): JSX.Element {
   const conversations = useConversations();
   const tags = useTags();
   const agents = useAgents();
+  const tools = useTools();
   const reloadConversations = conversations.reload;
 
   const setTweak = (patch: Partial<TweakState>) => setTweaks((s) => ({ ...s, ...patch }));
@@ -289,8 +296,14 @@ export function App(): JSX.Element {
 
   const headerTitle = thread.conversation?.title ?? activeConvMeta?.title ?? "";
   const headerAgent = thread.conversation?.agent ?? activeConvMeta?.agent ?? "Assistant";
-  const enabledToolCount =
-    agents.data?.find((agent) => agent.name === headerAgent)?.tools ?? 0;
+  const activeAgentMeta = agents.data?.find((agent) => agent.name === headerAgent) ?? null;
+  const activeAgent = useAgentFull(activeAgentMeta?.id ?? null);
+  const enabledToolIds = useMemo(() => {
+    const ids = new Set(["web_search", ...(activeAgent.data?.tool_ids ?? [])]);
+    return [...ids].filter(
+      (id) => id === "web_search" || tools.data?.some((tool) => tool.id === id && tool.enabled),
+    );
+  }, [activeAgent.data?.tool_ids, tools.data]);
   const threadError = thread.state.lastError;
   const lastAsstNode = useMemo(
     () => [...linearThread].reverse().find((n) => n.role === "asst") ?? null,
@@ -526,7 +539,8 @@ export function App(): JSX.Element {
 
         <Composer
           agentName={headerAgent}
-          enabledToolCount={enabledToolCount}
+          tools={tools.data ?? []}
+          enabledToolIds={enabledToolIds}
           /* Only offered once we've actually stopped following, so it never
              appears while the thread is already carrying the user down. */
           jumpToLatest={

@@ -170,7 +170,12 @@ const server = createServer((req, res) => {
   if (path === "/tags") return json(res, [{ id: "t-1", name: "work", color: "ochre" }]);
   if (path === "/agents") return json(res, [AGENT]);
   if (path === "/agent-templates") return json(res, []);
-  if (path === "/tools") return json(res, []);
+  if (path === "/tools") {
+    return json(res, [
+      { id: "web_search", name: "web_search", desc: "Search the web for recent info.", enabled: true, auto: true },
+      { id: "write_file", name: "write_file", desc: "Write a file after approval.", enabled: true, auto: false },
+    ]);
+  }
 
   if (path.endsWith("/interject") || path.endsWith("/cancel")) return json(res, { ok: true });
 

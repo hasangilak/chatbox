@@ -1,9 +1,11 @@
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Icon } from "./Icon";
+import type { ToolDef } from "../types";
 
 export interface ComposerProps {
   agentName: string;
-  enabledToolCount: number;
+  tools: ToolDef[];
+  enabledToolIds: string[];
   tokensUsed?: number;
   tokenBudget?: number;
   onSend: (content: string) => Promise<void> | void;
@@ -31,7 +33,8 @@ function formatTokens(used: number | undefined, budget: number | undefined): str
 
 export function Composer({
   agentName,
-  enabledToolCount,
+  tools,
+  enabledToolIds,
   tokensUsed,
   tokenBudget,
   onSend,
@@ -44,6 +47,16 @@ export function Composer({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+
+  useEffect(() => {
+    if (!showTools) return;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setShowTools(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [showTools]);
 
   const hasDraft = draft.trim().length > 0;
   // While a turn is live the primary action steers it instead of queueing a new
@@ -84,6 +97,20 @@ export function Composer({
   };
 
   const submitLabel = steering ? (busy ? "Steering" : "Steer") : busy ? "Sending" : "Send";
+  const toolCount = enabledToolIds.length;
+
+  const toolLabel = (id: string, fallback: string): string => {
+    const labels: Record<string, string> = {
+      web_search: "Web search",
+      read_file: "Read files",
+      write_file: "Write files",
+      run_tests: "Run tests",
+      web_fetch: "Fetch web page",
+      sql_query: "SQL query",
+      send_email: "Send email",
+    };
+    return labels[id] ?? fallback;
+  };
 
   return (
     <div className="composer-wrap">
@@ -93,10 +120,15 @@ export function Composer({
           <span className="composer-chip selected">
             <Icon name="users" size={10} /> {agentName}
           </span>
-          <span className="composer-chip">
-            <Icon name="tool" size={10} /> {enabledToolCount} tool
-            {enabledToolCount === 1 ? "" : "s"}
-          </span>
+          <button
+            type="button"
+            className={`composer-chip ${showTools ? "open" : ""}`}
+            onClick={() => setShowTools((open) => !open)}
+            aria-expanded={showTools}
+            aria-controls="composer-tools-panel"
+          >
+            <Icon name="tool" size={10} /> {toolCount} tool{toolCount === 1 ? "" : "s"}
+          </button>
           <span className="composer-chip">
             <Icon name="attach" size={10} /> context
           </span>
@@ -108,6 +140,58 @@ export function Composer({
             {formatTokens(tokensUsed, tokenBudget)}
           </span>
         </div>
+        {showTools && (
+          <section
+            id="composer-tools-panel"
+            className="composer-tools"
+            aria-label="Tools"
+          >
+            <div className="composer-tools-head">
+              <div>
+                <div className="smallcaps">Tools</div>
+                <div className="composer-tools-note">
+                  Search is available in every conversation. Other tools follow the selected
+                  agent.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => setShowTools(false)}
+                aria-label="Close tools"
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </div>
+            <div className="composer-tools-list">
+              {tools.map((tool) => {
+                const alwaysOn = tool.id === "web_search";
+                const active = alwaysOn || enabledToolIds.includes(tool.id);
+                const state = !tool.enabled
+                  ? "Unavailable"
+                  : alwaysOn
+                    ? "Always on"
+                    : active
+                      ? `On for ${agentName}`
+                      : "Off";
+                return (
+                  <div className="composer-tool-row" key={tool.id} data-active={active}>
+                    <span className="composer-tool-icon">
+                      <Icon name={alwaysOn ? "search" : "tool"} size={13} />
+                    </span>
+                    <span className="composer-tool-copy">
+                      <strong>{toolLabel(tool.id, tool.name)}</strong>
+                      <span>{tool.desc}</span>
+                    </span>
+                    <span className={`composer-tool-state ${alwaysOn ? "always" : ""}`}>
+                      {state}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -123,7 +207,13 @@ export function Composer({
           <button className="icon-btn">
             <Icon name="attach" size={13} />
           </button>
-          <button className="icon-btn">
+          <button
+            className="icon-btn"
+            type="button"
+            onClick={() => setShowTools((open) => !open)}
+            aria-label="Open tools"
+            aria-expanded={showTools}
+          >
             <Icon name="tool" size={13} />
           </button>
           <button className="icon-btn">

@@ -1,4 +1,4 @@
-import { listAgents, listAgentTemplates } from "../api/agents";
+import { getAgentFull, listAgents, listAgentTemplates } from "../api/agents";
 import { listConversations } from "../api/conversations";
 import { listTags } from "../api/tags";
 import { listTools } from "../api/tools";
@@ -10,6 +10,10 @@ export function useConversations() {
 
 export function useAgents() {
   return useAsync(() => listAgents(), []);
+}
+
+export function useAgentFull(id: string | null) {
+  return useAsync(() => (id ? getAgentFull(id) : Promise.resolve(null)), [id]);
 }
 
 export function useAgentTemplates() {
