@@ -294,6 +294,15 @@ export function App(): JSX.Element {
     return conversations.data?.find((c) => c.id === activeConv) ?? null;
   }, [activeConv, conversations.data]);
 
+  // The live title event updates the header through useThread. Mirror it into
+  // the workspace listing so the sidebar changes without waiting for another
+  // navigation or manual refresh.
+  useEffect(() => {
+    const liveTitle = thread.conversation?.title;
+    if (!liveTitle || !activeConvMeta || liveTitle === activeConvMeta.title) return;
+    void reloadConversations();
+  }, [activeConvMeta, reloadConversations, thread.conversation?.title]);
+
   const headerTitle = thread.conversation?.title ?? activeConvMeta?.title ?? "";
   const headerAgent = thread.conversation?.agent ?? activeConvMeta?.agent ?? "Assistant";
   const activeAgentMeta = agents.data?.find((agent) => agent.name === headerAgent) ?? null;

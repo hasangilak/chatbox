@@ -318,6 +318,11 @@ export function applyEvent(state: ThreadState, ev: BusEvent): ThreadState {
         artifactBumpKey: state.artifactBumpKey + 1,
       };
 
+    // Conversation metadata lives beside ThreadState in useThread. Advancing
+    // the cursor here still matters so reconnect starts after this event.
+    case "conversation.title.updated":
+      return { ...state, ...withEventId };
+
     case "error":
       return {
         ...state,

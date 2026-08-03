@@ -72,7 +72,14 @@ function reducer(state: ReducerState, action: Action): ReducerState {
         error: action.message,
       };
     case "event":
-      return { ...state, thread: applyEvent(state.thread, action.event) };
+      return {
+        ...state,
+        thread: applyEvent(state.thread, action.event),
+        conversation:
+          action.event.kind === "conversation.title.updated" && state.conversation
+            ? { ...state.conversation, title: action.event.title }
+            : state.conversation,
+      };
     case "prompt/settled":
       return {
         ...state,

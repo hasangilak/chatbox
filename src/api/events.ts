@@ -123,6 +123,11 @@ export interface ActiveLeafChangedEvent extends BaseEvent {
   active_leaf_id: string;
 }
 
+export interface ConversationTitleUpdatedEvent extends BaseEvent {
+  kind: "conversation.title.updated";
+  title: string;
+}
+
 export interface ErrorEvent extends BaseEvent {
   kind: "error";
   node_id?: string;
@@ -146,6 +151,7 @@ export type BusEvent =
   | ArtifactUpdatedEvent
   | NodeFinalizedEvent
   | ActiveLeafChangedEvent
+  | ConversationTitleUpdatedEvent
   | ErrorEvent;
 
 export type BusEventKind = BusEvent["kind"];
